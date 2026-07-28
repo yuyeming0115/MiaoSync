@@ -1,0 +1,24 @@
+# Binaries
+/miaosync
+*.exe
+/dist/
+
+# Build artifacts
+*.o
+*.a
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+
+# Local config（含真实路径，切勿提交）
+maiosync.yaml
+config/maiosync.yaml
+
+# Snapshot data
+.miaosync/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,30 @@
+# MiaoSync 示例配置
+# 复制为 miaosync.yaml 并修改为你的实际路径（maiosync.yaml 已被 .gitignore 忽略，不会误提交）
+
+nodes:
+  - name: win-pc
+    # Windows 个人电脑同步目录
+    win-path: "D:\\Sync"
+    mac-path: ""          # 该端不在 Mac 上出现可留空
+    role: peer
+
+  - name: mac-pc
+    # macOS 个人电脑同步目录
+    mac-path: "/Users/you/Sync"
+    win-path: ""
+    role: peer
+
+  - name: hdd
+    # 移动硬盘：插到哪台就是哪台的路径
+    win-path: "E:\\Sync"
+    mac-path: "/Volumes/Backup/Sync"
+    role: peer
+
+mode: mirror                # mirror=双向同步 | backup=单向备份（硬盘只作备份时用）
+conflict: rename           # rename=重命名冲突副本 | keep | newer
+ignore:
+  - ".DS_Store"
+  - "Thumbs.db"
+  - "node_modules"
+  - ".git"
+  - ".miaosync"            # 快照目录自身不参同步
