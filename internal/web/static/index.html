@@ -8,104 +8,86 @@
 </head>
 <body>
   <div class="app">
-    <!-- 左列：品牌 + 全局操作 + 状态 -->
+    <!-- 左列：配置（节点 / 规则 / 操作），尽量紧凑 -->
     <aside class="sidebar">
       <div class="brand">
         <span class="logo">🐱</span>
         <div>
           <h1>MiaoSync</h1>
-          <p class="tagline">Win / Mac / 移动硬盘<br/>三端同步备份猫</p>
+          <p class="ver">v0.1.0 · 本地优先 · 不上云</p>
         </div>
       </div>
+
+      <section class="side-sec">
+        <div class="side-head">节点 <button id="btnAddNode" class="mini" title="添加节点">＋ 添加</button></div>
+        <div id="nodeList"></div>
+        <div class="part-row">
+          <span class="part-label">参与</span>
+          <div id="participate" class="part"></div>
+        </div>
+      </section>
+
+      <section class="side-sec rules">
+        <div class="side-head">规则</div>
+        <div class="rule-grid">
+          <label>模式
+            <select id="mode">
+              <option value="mirror">mirror · 双向镜像</option>
+              <option value="backup">backup · 单向备份</option>
+            </select>
+          </label>
+          <label>冲突
+            <select id="conflict">
+              <option value="rename">rename · 旧版重命名备份</option>
+              <option value="keep">keep · 两端各自保留</option>
+              <option value="newer">newer · 仅留较新</option>
+            </select>
+          </label>
+        </div>
+        <details class="ignore-box">
+          <summary>忽略规则（glob，每行一个）</summary>
+          <textarea id="ignore" rows="3" placeholder=".DS_Store&#10;Thumbs.db&#10;node_modules"></textarea>
+        </details>
+      </section>
 
       <nav class="actions">
-        <button id="btnSave" class="btn btn-primary btn-block">💾 保存配置</button>
-        <button id="btnPreview" class="btn btn-block">👁 预览同步</button>
-        <button id="btnSync" class="btn btn-run btn-block">🚀 执行同步</button>
+        <button id="btnPreview" class="btn">👁 预览对比</button>
+        <button id="btnSync" class="btn btn-run">🚀 执行同步</button>
+        <button id="btnSave" class="btn btn-ghost btn-sm">💾 保存配置</button>
       </nav>
 
-      <div class="sidebar-tips">
-        <p class="tips-title">💡 三步上手</p>
-        <ol class="tips-list">
-          <li>插上硬盘，确认节点路径</li>
-          <li>点「预览同步」核对计划</li>
-          <li>无误后「执行同步」</li>
-        </ol>
-      </div>
-
-      <div class="sidebar-footer">
-        <div class="status-row">
-          <span id="connStatus" class="badge badge-ok">已连接</span>
-          <button id="btnRefresh" class="btn btn-ghost btn-sm" title="刷新状态">⟳ 刷新</button>
-        </div>
-        <p class="version">MVP · v0.1.0</p>
+      <div class="side-foot">
+        <span id="connStatus" class="badge badge-ok">已连接</span>
+        <button id="btnRefresh" class="mini" title="刷新节点状态">⟳</button>
       </div>
     </aside>
 
-    <!-- 右列：配置 + 预览 + 日志 -->
+    <!-- 右列：文件对比（核心）+ 风险 + 迷你日志 -->
     <main class="main">
-      <section class="card">
-        <h2>🖥️ 同步节点</h2>
-        <p class="hint">添加你的三端目录。同一节点可分别填 Windows 与 macOS 路径，程序会按当前系统自动选用。</p>
-        <div id="nodeList" class="node-list"></div>
-        <button id="btnAddNode" class="btn btn-ghost btn-block">＋ 添加节点</button>
-      </section>
+      <header class="main-head">
+        <h2>📂 文件对比</h2>
+        <div id="nodeBadges" class="node-badges"></div>
+        <div id="cmpChips" class="chips"></div>
+      </header>
 
-      <section class="card">
-        <h2>⚙️ 同步设置</h2>
-        <div class="settings-grid">
-          <label class="field">
-            <span>模式</span>
-            <select id="mode">
-              <option value="mirror">mirror · 双向同步（互为镜像）</option>
-              <option value="backup">backup · 单向备份（仅源→目标）</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>冲突策略</span>
-            <select id="conflict">
-              <option value="rename">rename · 保留较新，旧版重命名备份</option>
-              <option value="keep">keep · 两端各自保留</option>
-              <option value="newer">newer · 仅保留较新，删除旧版</option>
-            </select>
-          </label>
-          <label class="field field-wide">
-            <span>忽略规则（每行一个 glob）</span>
-            <textarea id="ignore" rows="3" placeholder=".DS_Store&#10;Thumbs.db&#10;node_modules"></textarea>
-          </label>
+      <div id="riskBanner" class="risk-banner" hidden></div>
+
+      <section class="cmp-wrap">
+        <div id="cmpFilters" class="cmp-filters" hidden>
+          <button class="chip active" data-f="all">全部</button>
+          <button class="chip" data-f="rename-conflict">🔺 冲突</button>
+          <button class="chip" data-f="delete">🟠 删除</button>
+          <button class="chip" data-f="copy">复制</button>
         </div>
-        <div class="field">
-          <span>参与本次同步的节点（至少 2 个）</span>
-          <div id="participate" class="participate"></div>
+        <div id="cmpTable" class="cmp">
+          <p class="empty">① 插上硬盘 → ② 点「👁 预览对比」核对差异与风险 → ③ 无误后「🚀 执行同步」</p>
         </div>
       </section>
 
-      <div class="row-pair">
-        <section class="card">
-          <h2>📊 同步计划预览</h2>
-          <div id="previewSummary" class="summary">
-            <span class="stat stat-copy">复制 0</span>
-            <span class="stat stat-del">删除 0</span>
-            <span class="stat stat-conf">冲突 0</span>
-          </div>
-          <div id="previewList" class="action-list">
-            <p class="empty">点击「预览同步」查看将执行的操作。</p>
-          </div>
-        </section>
-
-        <section class="card">
-          <h2>📜 执行日志</h2>
-          <div class="progress-wrap">
-            <div id="progressBar" class="progress-bar"></div>
-          </div>
-          <div id="log" class="log"><span class="log-empty">暂无日志 —— 执行同步后此处显示进度</span></div>
-        </section>
-      </div>
-
-      <section class="card card-compact">
-        <h2>💡 节点状态</h2>
-        <div id="statusList" class="status-list"></div>
-      </section>
+      <footer class="runbar">
+        <div class="progress-wrap"><div id="progressBar" class="progress-bar"></div></div>
+        <div id="log" class="log" title="点击展开 / 收起"></div>
+      </footer>
     </main>
   </div>
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"time"
 
@@ -66,6 +67,7 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("/api/plan", s.handlePlan)
 	mux.HandleFunc("/api/pick-folder", s.handlePickFolder)
 	mux.HandleFunc("/api/sync", s.handleSync)
+	mux.HandleFunc("/api/meta", s.handleMeta)
 	mux.HandleFunc("/", s.handleIndex)
 	return mux
 }
@@ -175,6 +177,11 @@ func (s *Server) removePlan(id string) {
 	s.planMu.Lock()
 	defer s.planMu.Unlock()
 	delete(s.plans, id)
+}
+
+// handleMeta 返回运行平台等元信息（前端据此决定展示哪个平台的路径输入框）。
+func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]string{"platform": runtime.GOOS})
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {

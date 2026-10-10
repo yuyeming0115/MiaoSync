@@ -1,9 +1,11 @@
 // MiaoSync 前端逻辑（原生 JS，无框架）。
+// 布局原则：文件对比是主角，风险优先，配置与日志能小则小。
 (function () {
   "use strict";
 
   const state = {
     config: null,
+    platform: "windows",
     participating: new Set(),
     planId: null, // P1-2：预览返回的计划 ID，执行时回传以消除 TOCTOU
   };
@@ -35,32 +37,51 @@
     setTimeout(() => (t.className = "toast"), 3200);
   }
 
-  // ---------- 渲染：节点编辑 ----------
+  function curField() {
+    return state.platform === "darwin" ? "mac-path" : "win-path";
+  }
+
+  // ---------- 渲染：节点编辑（紧凑版） ----------
   function renderNodes() {
     const wrap = $("#nodeList");
     wrap.innerHTML = "";
+    const cur = curField();
+    const oth = cur === "mac-path" ? "win-path" : "mac-path";
+    const curLbl = cur === "mac-path" ? "macOS 路径" : "Windows 路径";
+    const othLbl = cur === "mac-path" ? "Windows 路径" : "macOS 路径";
     (state.config.nodes || []).forEach((n, i) => {
+      const hasOther = !!(n[oth] && String(n[oth]).trim());
       const div = document.createElement("div");
       div.className = "node";
       div.innerHTML = `
-        <button class="del" data-i="${i}" title="删除节点">✕</button>
         <div class="row">
-          <input class="nm" data-i="${i}" value="${esc(n.name || "")}" placeholder="节点名（如 win-pc）" />
+          <input class="nm" data-i="${i}" value="${esc(n.name || "")}" placeholder="节点名（如 hdd）" />
           <select class="role" data-i="${i}">
             <option value="peer"${n.role === "peer" ? " selected" : ""}>peer</option>
             <option value="source"${n.role === "source" ? " selected" : ""}>source</option>
             <option value="target"${n.role === "target" ? " selected" : ""}>target</option>
           </select>
+          <button class="del" data-i="${i}" title="删除节点">✕</button>
         </div>
         <div class="row path-row">
-          <input class="wp" data-i="${i}" value="${esc(n["win-path"] || "")}" placeholder="Windows 路径，如 D:\\Sync" />
-          <button class="browse" type="button" data-i="${i}" data-field="win-path" title="选择文件夹">📁</button>
+          <input class="pp" data-i="${i}" data-f="${cur}" value="${esc(n[cur] || "")}" placeholder="${curLbl}，如 D:\\Sync" />
+          <button class="browse" type="button" data-i="${i}" data-f="${cur}" title="选择文件夹">📁</button>
         </div>
-        <div class="row path-row">
-          <input class="mp" data-i="${i}" value="${esc(n["mac-path"] || "")}" placeholder="macOS 路径，如 /Users/you/Sync" />
-          <button class="browse" type="button" data-i="${i}" data-field="mac-path" title="选择文件夹">📁</button>
+        <div class="row path-row other-row" data-i="${i}"${hasOther ? "" : " hidden"}>
+          <input class="pp" data-i="${i}" data-f="${oth}" value="${esc(n[oth] || "")}" placeholder="${othLbl}" />
+          <button class="browse" type="button" data-i="${i}" data-f="${oth}" title="选择文件夹">📁</button>
         </div>`;
       wrap.appendChild(div);
+      if (!hasOther) {
+        const link = document.createElement("button");
+        link.className = "mini link add-other";
+        link.textContent = "＋ " + othLbl;
+        link.addEventListener("click", () => {
+          div.querySelector(".other-row").hidden = false;
+          link.remove();
+        });
+        div.appendChild(link);
+      }
     });
     bindNodeInputs();
     renderParticipate();
@@ -77,25 +98,21 @@
         state.config.nodes[+e.target.dataset.i].role = e.target.value;
       })
     );
-    $$("#nodeList .wp").forEach((el) =>
+    $$("#nodeList .pp").forEach((el) =>
       el.addEventListener("input", (e) => {
-        state.config.nodes[+e.target.dataset.i]["win-path"] = e.target.value;
-      })
-    );
-    $$("#nodeList .mp").forEach((el) =>
-      el.addEventListener("input", (e) => {
-        state.config.nodes[+e.target.dataset.i]["mac-path"] = e.target.value;
+        const i = +e.target.dataset.i;
+        const f = e.target.dataset.f;
+        state.config.nodes[i][f] = e.target.value;
       })
     );
     $$("#nodeList .browse").forEach((el) =>
       el.addEventListener("click", (e) => {
-        const i = +e.target.dataset.i;
-        const field = e.target.dataset.field;
-        const cls = field === "win-path" ? ".wp" : ".mp";
-        const input = document.querySelector(`#nodeList ${cls}[data-i="${i}"]`);
+        const i = +e.currentTarget.dataset.i;
+        const field = e.currentTarget.dataset.f;
+        const input = document.querySelector(`#nodeList .pp[data-f="${field}"][data-i="${i}"]`);
         if (!input) return;
-        e.target.disabled = true;
-        e.target.textContent = "…";
+        e.currentTarget.disabled = true;
+        e.currentTarget.textContent = "…";
         postJSON("/api/pick-folder", {})
           .then((data) => {
             if (data.path) {
@@ -105,8 +122,8 @@
           })
           .catch((err) => toast("选择文件夹失败：" + err.message, true))
           .finally(() => {
-            e.target.disabled = false;
-            e.target.textContent = "📁";
+            e.currentTarget.disabled = false;
+            e.currentTarget.textContent = "📁";
           });
       })
     );
@@ -139,74 +156,153 @@
     });
   }
 
-  // ---------- 渲染：状态 ----------
+  // ---------- 渲染：节点状态（头部小徽标） ----------
   function renderStatus() {
-    const wrap = $("#statusList");
-    wrap.innerHTML = "";
     getJSON("/api/status")
       .then((data) => {
-        // P3：显示运行状态
-        const running = data.running;
         const btnSync = $("#btnSync");
-        if (btnSync) btnSync.disabled = running;
-        if (running) {
-          const banner = document.createElement("div");
-          banner.className = "status running";
-          banner.innerHTML = `<div class="name">🔄 同步进行中…</div>`;
-          wrap.appendChild(banner);
+        if (btnSync) btnSync.disabled = !!data.running;
+        const wrap = $("#nodeBadges");
+        wrap.innerHTML = "";
+        if (data.running) {
+          const b = document.createElement("span");
+          b.className = "nbadge run";
+          b.textContent = "🔄 同步进行中…";
+          wrap.appendChild(b);
         }
         (data.nodes || []).forEach((s) => {
-          const div = document.createElement("div");
-          div.className = "status";
+          const b = document.createElement("span");
           const sync = s.lastSync ? new Date(s.lastSync).toLocaleString() : "从未同步";
-          div.innerHTML = `
-            <div>
-              <div class="name">${esc(s.name)}</div>
-              <div class="meta">${esc(s.path)}</div>
-            </div>
-            <div class="meta">
-              ${s.accessible ? `<span class="ok">${s.fileCount} 个文件</span>` : `<span class="bad">不可访问</span>`}
-              <br/>${sync}
-            </div>`;
-          wrap.appendChild(div);
+          b.className = "nbadge" + (s.accessible ? "" : " bad");
+          b.innerHTML = s.accessible
+            ? `${esc(s.name)} · ${s.fileCount} 个文件`
+            : `${esc(s.name)} · ⚠ 不可访问`;
+          b.title = `${s.path}\n上次同步：${sync}`;
+          wrap.appendChild(b);
         });
       })
       .catch(() => {
-        wrap.innerHTML = `<p class="empty">获取状态失败</p>`;
+        $("#connStatus").textContent = "未连接";
+        $("#connStatus").className = "badge";
       });
   }
 
-  // ---------- 预览 ----------
-  function renderPreview(actions) {
+  // ---------- 文件对比（核心视图） ----------
+  const KIND_RANK = { "rename-conflict": 0, delete: 1, copy: 2, skip: 3 };
+  const CELL_DEF = {
+    src: { t: "● 源", cls: "c-src" },
+    dst: { t: "⬆ 更新", cls: "c-dst" },
+    del: { t: "✕ 删除", cls: "c-del" },
+    conflict: { t: "🔺 已改", cls: "c-conf" },
+    na: { t: "—", cls: "c-na" },
+  };
+
+  function normPath(p) {
+    return String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  }
+
+  // 根据动作的绝对路径推导某节点在此动作中的角色
+  function cellFor(a, nodeName, rootMap) {
+    const root = rootMap[nodeName] || "";
+    const from = normPath(a.from);
+    const to = normPath(a.to);
+    const fromHere = root && from && (from === root || from.startsWith(root + "/"));
+    const toHere = root && to && (to === root || to.startsWith(root + "/"));
+    switch (a.kind) {
+      case "copy":
+        return fromHere ? "src" : toHere ? "dst" : "na";
+      case "delete":
+        return toHere ? "del" : "na";
+      case "rename-conflict":
+        return fromHere || toHere ? "conflict" : "na";
+      default:
+        return "na";
+    }
+  }
+
+  function renderCompare(actions, names) {
     const counts = { copy: 0, delete: 0, "rename-conflict": 0 };
     actions.forEach((a) => (counts[a.kind] = (counts[a.kind] || 0) + 1));
-    $("#previewSummary").innerHTML =
+    $("#cmpChips").innerHTML =
       `<span class="stat stat-copy">复制 ${counts.copy || 0}</span>` +
       `<span class="stat stat-del">删除 ${counts.delete || 0}</span>` +
       `<span class="stat stat-conf">冲突 ${counts["rename-conflict"] || 0}</span>`;
 
-    const list = $("#previewList");
-    list.innerHTML = "";
+    // 风险横幅：冲突 / 删除永远置顶提示
+    const risks = actions.filter((a) => a.kind === "rename-conflict" || a.kind === "delete");
+    const banner = $("#riskBanner");
+    if (risks.length) {
+      const nc = counts["rename-conflict"] || 0;
+      const nd = counts.delete || 0;
+      const sample = risks
+        .slice(0, 4)
+        .map((a) => `<code>${esc(a.relPath)}</code>`)
+        .join("、");
+      banner.innerHTML =
+        `<b>⚠️ 本次包含 ${nc ? "🔴 " + nc + " 个冲突" : ""}${nc && nd ? "，" : ""}${nd ? "🟠 " + nd + " 个删除" : ""}</b>` +
+        `<span class="risk-sub">${sample}${risks.length > 4 ? ` 等 ${risks.length} 项` : ""}` +
+        ` —— 冲突与删除会改动原文件，请核对下方列表后再执行。</span>`;
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
+    }
+
+    const table = $("#cmpTable");
+    const filters = $("#cmpFilters");
+    window.__lastPlan = { actions, names };
+
     if (!actions.length) {
-      list.innerHTML = `<p class="empty">✅ 两端已经一致，无需同步。</p>`;
+      filters.hidden = true;
+      table.innerHTML = `<p class="empty ok-big">✅ ${esc(names.join(" ↔ "))} 已完全一致，无需同步。</p>`;
       return;
     }
-    actions.slice(0, 500).forEach((a) => {
-      const el = document.createElement("div");
-      el.className = "act " + a.kind;
-      const label = a.kind === "copy" ? "COPY" : a.kind === "delete" ? "DELETE" : "CONFLICT";
-      el.innerHTML = `<span class="kind">${label}</span><span class="rel">${esc(a.relPath)}</span><span class="reason">${esc(a.reason || "")}</span>`;
-      list.appendChild(el);
+    filters.hidden = false;
+
+    // 各节点根路径（用于把动作的绝对路径映射到节点）
+    const rootMap = {};
+    const f = curField();
+    (state.config.nodes || []).forEach((n) => {
+      if (names.indexOf(n.name) >= 0) rootMap[n.name] = normPath(n[f] || "");
     });
-    if (actions.length > 500) {
-      const more = document.createElement("p");
-      more.className = "empty";
-      more.textContent = `… 还有 ${actions.length - 500} 个动作`;
-      list.appendChild(more);
+
+    const sorted = actions.slice().sort((x, y) => (KIND_RANK[x.kind] ?? 9) - (KIND_RANK[y.kind] ?? 9));
+    const filter = window.__cmpFilter || "all";
+    const rows = filter === "all" ? sorted : sorted.filter((a) => a.kind === filter);
+
+    let html =
+      `<table class="cmp-table"><thead><tr><th class="col-file">文件（仅显示有差异的 ${actions.length} 个）</th>` +
+      names.map((n) => `<th>${esc(n)}</th>`).join("") +
+      `<th class="col-act">将执行</th></tr></thead><tbody>`;
+    rows.slice(0, 300).forEach((a) => {
+      const cells = names
+        .map((nm) => {
+          const c = CELL_DEF[cellFor(a, nm, rootMap)];
+          return `<td><span class="cs ${c.cls}">${c.t}</span></td>`;
+        })
+        .join("");
+      let act;
+      if (a.kind === "copy") {
+        const dst = names.find((nm) => cellFor(a, nm, rootMap) === "dst");
+        act = `<span class="act-copy">⬆ 复制 → ${esc(dst || "?")}</span>`;
+      } else if (a.kind === "delete") {
+        act = `<span class="act-del">✕ 删除</span>`;
+      } else if (a.kind === "rename-conflict") {
+        act = `<span class="act-conf">⚠ 冲突归档</span>`;
+      } else {
+        act = `<span class="act-skip">跳过</span>`;
+      }
+      const rowCls =
+        a.kind === "rename-conflict" ? "r-conflict" : a.kind === "delete" ? "r-delete" : "";
+      html += `<tr class="${rowCls}"><td class="f">${esc(a.relPath)}</td>${cells}<td>${act}</td></tr>`;
+    });
+    html += "</tbody></table>";
+    if (rows.length > 300) {
+      html += `<p class="empty">… 还有 ${rows.length - 300} 个差异未显示（可用上方筛选缩小范围）</p>`;
     }
+    table.innerHTML = html;
   }
 
-  // ---------- 日志 ----------
+  // ---------- 日志（迷你，可展开） ----------
   function addLog(msg, cls) {
     const log = $("#log");
     const div = document.createElement("div");
@@ -231,10 +327,9 @@
   }
 
   function selectedNodes() {
-    const names = Array.from(state.participating).filter((n) =>
+    return Array.from(state.participating).filter((n) =>
       (state.config.nodes || []).some((x) => x.name === n)
     );
-    return names;
   }
 
   async function loadConfig() {
@@ -269,7 +364,7 @@
         conflict: $("#conflict").value,
       });
       state.planId = data.planId; // P1-2：保存计划 ID 供执行时回传
-      renderPreview(data.actions);
+      renderCompare(data.actions || [], names);
       addLog(`预览完成：复制 ${data.copied} / 删除 ${data.deleted} / 冲突 ${data.conflicts}`, "ok");
     } catch (e) {
       toast("预览失败：" + e.message, true);
@@ -280,7 +375,7 @@
     const names = selectedNodes();
     if (names.length < 2) return toast("请至少选择 2 个参与同步的节点", true);
     // P1-2：必须先预览获取计划 ID，执行时回传以消除 TOCTOU
-    if (!state.planId) return toast("请先预览同步计划", true);
+    if (!state.planId) return toast("请先「预览对比」核对计划", true);
     const btn = $("#btnSync");
     btn.disabled = true;
     $("#log").innerHTML = "";
@@ -555,6 +650,21 @@
     $("#btnSync").addEventListener("click", runSync);
     $("#btnRefresh").addEventListener("click", renderStatus);
 
+    // 对比筛选
+    $$("#cmpFilters .chip").forEach((el) =>
+      el.addEventListener("click", () => {
+        $$("#cmpFilters .chip").forEach((c) => c.classList.remove("active"));
+        el.classList.add("active");
+        window.__cmpFilter = el.dataset.f;
+        if (window.__lastPlan) renderCompare(window.__lastPlan.actions, window.__lastPlan.names);
+      })
+    );
+
+    // 迷你日志点击展开/收起
+    $("#log").addEventListener("click", (e) => {
+      e.currentTarget.classList.toggle("expanded");
+    });
+
     // 报告弹层：关闭 + 危险操作确认
     $$("#reportModal [data-close]").forEach((el) =>
       el.addEventListener("click", () => ($("#reportModal").hidden = true))
@@ -575,13 +685,20 @@
       })
     );
 
-    loadConfig()
+    // 元信息（平台）→ 配置 → 状态
+    getJSON("/api/meta")
+      .then((meta) => {
+        state.platform = meta.platform || "windows";
+        return loadConfig();
+      })
       .then(renderStatus)
       .catch(() => {
         $("#connStatus").textContent = "未连接";
         $("#connStatus").className = "badge";
         toast("无法连接后端，请确认程序已启动", true);
       });
+
+    setInterval(renderStatus, 15000);
   }
 
   document.addEventListener("DOMContentLoaded", init);

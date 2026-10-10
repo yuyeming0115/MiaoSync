@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
+	"time"
 
 	"github.com/yuyeming0115/MiaoSync/internal/web"
 )
@@ -21,6 +21,7 @@ func main() {
 	if exe, err := os.Executable(); err == nil {
 		logPath := filepath.Join(filepath.Dir(exe), "miaosync.log")
 		if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			defer f.Close()
 			log.SetOutput(io.MultiWriter(f, os.Stderr))
 		}
 	}
@@ -32,41 +33,49 @@ func main() {
 
 	server, err := web.New(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
-		os.Exit(1)
+		fatalExit("初始化失败", err)
 	}
 
 	addr := "127.0.0.1:" + *port
 	url := "http://" + addr + "/"
-	fmt.Println("🐱 MiaoSync 已启动")
-	fmt.Printf("   浏览器打开：%s\n", url)
-	fmt.Printf("   配置文件：%s\n", *configPath)
-	fmt.Println("   按 Ctrl+C 退出。")
+
+	// 已有实例在运行：双击重复启动时直接打开其界面后退出，而不是无声失败。
+	conn, dialErr := net.DialTimeout("tcp", addr, 600*time.Millisecond)
+	if dialErr == nil {
+		conn.Close()
+		log.Printf("检测到已在运行的实例（%s），打开界面后退出", addr)
+		if !*noOpen {
+			if err := openURL(url); err != nil {
+				fatalExit("无法打开浏览器", err)
+			}
+		}
+		return
+	}
+
+	log.Printf("🐱 MiaoSync 已启动：%s（配置：%s，Ctrl+C 退出）", url, *configPath)
 
 	if !*noOpen {
-		go openBrowser(url)
+		go func() {
+			// 稍等片刻让监听就绪，再拉起浏览器
+			time.Sleep(400 * time.Millisecond)
+			if err := openURL(url); err != nil {
+				log.Printf("打开浏览器失败: %v", err)
+				fatalBox("MiaoSync 需要你的注意",
+					"服务已启动，但自动打开浏览器失败。\n请手动复制以下地址到浏览器访问：\n\n"+url)
+			}
+		}()
 	}
 
 	if err := server.Start(addr); err != nil {
-		fmt.Fprintf(os.Stderr, "服务异常: %v\n", err)
-		os.Exit(1)
+		fatalExit("服务异常", err)
 	}
 }
 
-// openBrowser 跨平台打开默认浏览器。
-func openBrowser(url string) {
-	var cmd string
-	var args []string
-	switch runtime.GOOS {
-	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", "", url}
-	case "darwin":
-		cmd = "open"
-		args = []string{url}
-	default:
-		cmd = "xdg-open"
-		args = []string{url}
-	}
-	_ = exec.Command(cmd, args...).Start()
+// fatalExit 记录日志、弹出原生消息框（Windows）后以非零码退出。
+// windowsgui 构建没有控制台，直接 os.Exit 会让用户以为"双击没反应"。
+func fatalExit(title string, err error) {
+	log.Printf("%s: %v", title, err)
+	fatalBox("MiaoSync - "+title,
+		fmt.Sprintf("%v\n\n若程序目录可写，同目录 miaosync.log 内有详细记录。", err))
+	os.Exit(1)
 }
