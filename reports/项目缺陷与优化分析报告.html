@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MiaoSync 项目缺陷与优化分析报告</title>
+  <style>
+    :root{--bg:#f4f6f8;--paper:#fff;--ink:#17212b;--muted:#607080;--line:#dce3e9;--p0:#b42318;--p1:#b54708;--p2:#175cd3;--ok:#087443;--accent:#0f766e}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+    .wrap{max-width:1180px;margin:0 auto;padding:36px 22px 64px}.hero{background:#102a43;color:#fff;padding:32px;border-radius:10px;box-shadow:0 8px 24px #102a4326}.hero h1{margin:0 0 8px;font-size:30px;letter-spacing:0}.hero p{margin:5px 0;color:#d8e5ef}.meta{font-size:13px;color:#b9ccdb}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0}.metric,.card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:18px}.metric strong{display:block;font-size:27px}.metric span{color:var(--muted);font-size:13px}.section{margin-top:26px}.section h2{font-size:21px;border-left:4px solid var(--accent);padding-left:10px;margin:0 0 12px}.lead{color:var(--muted)}.table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden}.table th,.table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}.table th{background:#f8fafb;color:var(--muted);font-weight:600}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.finding{background:var(--paper);border:1px solid var(--line);border-left:5px solid var(--p1);border-radius:8px;padding:16px}.finding.p0{border-left-color:var(--p0)}.finding.p1{border-left-color:var(--p1)}.finding.p2{border-left-color:var(--p2)}.finding h3{margin:0 0 6px;font-size:16px}.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;color:#fff;background:var(--p1);margin-right:6px}.p0 .tag{background:var(--p0)}.p1 .tag{background:var(--p1)}.p2 .tag{background:var(--p2)}.finding p{margin:7px 0;color:#40505d}.finding code,.card code{background:#eef2f5;padding:1px 5px;border-radius:4px;color:#075985}.steps{counter-reset:step;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.step{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px}.step:before{counter-increment:step;content:counter(step);display:block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#dff3ef;color:var(--accent);font-weight:700;margin-bottom:8px}.step h3{margin:0 0 6px}.ok{color:var(--ok);font-weight:600}.footer{margin-top:28px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}@media(max-width:850px){.grid,.steps{grid-template-columns:repeat(2,1fr)}.cards{grid-template-columns:1fr}}@media(max-width:540px){.wrap{padding:20px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}.grid,.steps{grid-template-columns:1fr}.table{font-size:13px}.table th,.table td{padding:8px}}
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <h1>MiaoSync 项目缺陷与优化分析报告</h1>
+    <p>基于当前工作区源码、配置、文档、测试与构建脚本的静态审查。</p>
+    <p class="meta">分析日期：2026-08-13　|　验证：go test、go test -race、go vet、go build</p>
+  </header>
+
+  <section class="grid" aria-label="项目评分">
+    <div class="metric"><strong>3/10</strong><span>数据安全</span></div>
+    <div class="metric"><strong>4/10</strong><span>核心正确性</span></div>
+    <div class="metric"><strong>4/10</strong><span>性能</span></div>
+    <div class="metric"><strong>7/10</strong><span>MVP 功能完整度</span></div>
+  </section>
+
+  <section class="section card">
+    <h2>执行摘要</h2>
+    <p class="lead">项目已经具备 Go 单二进制、内置 Web GUI、mirror/backup、快照、冲突副本和危险删除确认等 MVP 能力。当前测试与构建均通过，但同步内核还缺少可靠的事务边界，因此不建议直接用于唯一数据副本。</p>
+    <p><strong>最高优先级：</strong>先修复删除状态矩阵、失败后错误提交快照、非原子覆盖和并发执行，再扩展加密、自动触发或断点续传。</p>
+  </section>
+
+  <section class="section">
+    <h2>已验证事实</h2>
+    <table class="table"><thead><tr><th>检查项</th><th>结果</th><th>含义</th></tr></thead><tbody>
+      <tr><td><code>go test ./...</code></td><td class="ok">通过</td><td>现有基础同步测试可运行。</td></tr>
+      <tr><td><code>go test -race ./...</code></td><td class="ok">通过</td><td>未发现现有测试覆盖范围内的竞态；不代表 Web 并发安全。</td></tr>
+      <tr><td><code>go vet ./...</code> / <code>go build ./...</code></td><td class="ok">通过</td><td>基础编译和 vet 无阻塞问题。</td></tr>
+      <tr><td><code>gofmt -l cmd internal</code></td><td>4 个文件</td><td>快照、类型、Web API、Web Server 存在格式不一致。</td></tr>
+      <tr><td>测试范围</td><td>主要集中于 <code>internal/sync</code></td><td>配置、Web、文件系统、失败恢复未形成自动防线。</td></tr>
+    </tbody></table>
+  </section>
+
+  <section class="section">
+    <h2>关键缺陷</h2>
+    <div class="cards">
+      <article class="finding p0"><h3><span class="tag">P0</span>删除动作与恢复复制可能同时生成</h3><p><code>internal/sync/engine.go:94-141</code> 先处理“独有文件补齐”，再处理快照删除检测。同一路径可能得到反向复制和删除两个动作，导致一次运行后两端仍不一致。</p><p><strong>修复：</strong>为每个路径建立完整状态转换矩阵，每条路径只允许一个最终决策。</p></article>
+      <article class="finding p0"><h3><span class="tag">P0</span>动作失败后仍提交快照</h3><p><code>Run</code> 在 <code>Apply</code> 有错误时仍调用 <code>savePairSnapshot</code>。截断文件、未删除文件或失败冲突会被写入成功基线，下一轮可能反向污染正确数据。</p><p><strong>修复：</strong>引入 run journal，只有逐动作成功且全局复验通过才提交快照。</p></article>
+      <article class="finding p0"><h3><span class="tag">P0</span>复制和冲突替换不是原子操作</h3><p><code>os.Create(to)</code> 会先截断目标；<code>ConflictNewer</code> 还会先删除旧文件。磁盘满、拔盘或进程退出都可能留下半文件或直接丢失旧版本。</p><p><strong>修复：</strong>同目录临时文件、<code>Sync</code>、hash 校验、原子替换，失败时保留原目标。</p></article>
+      <article class="finding p0"><h3><span class="tag">P0</span>Web 服务没有同步独占锁</h3><p><code>Server</code> 没有 mutex 或任务队列，多个请求可同时改文件、配置和 snapshot。当前 race 测试未覆盖这个场景。</p><p><strong>修复：</strong>增加单任务 RunManager，第二个执行请求返回 <code>409 Conflict</code>。</p></article>
+      <article class="finding p1"><h3><span class="tag">P1</span>backup 方向不使用 role</h3><p>代码只按节点数组顺序决定 pair 的前后方向，<code>source/target</code> 字段没有参与规划。三节点结果会随选择顺序改变。</p><p><strong>修复：</strong>backup 强制一个 source、多个 target；mirror 只允许 peer。</p></article>
+      <article class="finding p1"><h3><span class="tag">P1</span>预览和执行存在 TOCTOU</h3><p>预览、危险确认和执行各自重新扫描，用户确认的动作不一定是实际执行的动作。</p><p><strong>修复：</strong>生成绑定快照版本与根路径指纹的 plan ID，状态变化后使计划失效。</p></article>
+      <article class="finding p1"><h3><span class="tag">P1</span>路径安全校验不足</h3><p>未拒绝相同目录、祖先/子目录、符号链接别名和高风险根目录。嵌套节点可能造成递归复制或容量爆炸。</p><p><strong>修复：</strong><code>Abs/Clean/EvalSymlinks</code> 后检查 canonical path 关系并二次确认。</p></article>
+      <article class="finding p1"><h3><span class="tag">P1</span>大小写折叠会吞掉文件</h3><p>所有平台统一将路径转小写作为 key；区分大小写磁盘上的 <code>A.txt</code> 与 <code>a.txt</code> 会被静默覆盖。</p><p><strong>修复：</strong>扫描时检测 compare key collision，阻止执行并展示冲突。</p></article>
+      <article class="finding p1"><h3><span class="tag">P1</span>冲突副本可能继续传播</h3><p>代码生成 <code>*.conflict-*</code>，默认 ignore 没有该规则；三节点时副本可能变成新业务文件并进入快照。</p><p><strong>修复：</strong>将副本集中放入 <code>.miaosync/conflicts/&lt;run-id&gt;</code>。</p></article>
+      <article class="finding p1"><h3><span class="tag">P1</span>每个 pair 重复全量扫描和 hash</h3><p>三节点的预览、执行、每 pair 快照保存都会重复读取文件，大文件场景吞吐退化明显。</p><p><strong>修复：</strong>每轮每节点扫描一次，缓存 metadata/hash，最后一次提交快照。</p></article>
+      <article class="finding p2"><h3><span class="tag">P2</span>快照缺少版本和恢复元数据</h3><p>没有 schema version、卷/目录身份、同步组 ID、成功 run ID 和校验信息，移动硬盘复用或快照损坏时难以安全恢复。</p></article>
+      <article class="finding p2"><h3><span class="tag">P2</span>配置、HTTP、测试与文档仍需工程化</h3><p>启动加载不做严格枚举校验；HTTP 缺少 body 限制、超时、优雅关闭；关键失败路径无测试；注释中的 blake2b 与实际 SHA-256 不一致。</p></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>推荐同步状态机</h2>
+    <div class="steps">
+      <div class="step"><h3>固化输入</h3><p>获取运行锁，加载并严格校验配置，生成 canonical path 和不可变 plan ID。</p></div>
+      <div class="step"><h3>全局规划</h3><p>每节点只扫描一次，检查路径、卷身份、大小写碰撞和符号链接，再生成全局计划。</p></div>
+      <div class="step"><h3>原子执行</h3><p>动作写入临时文件并校验；删除隔离；逐项记录 journal，支持取消与恢复。</p></div>
+      <div class="step"><h3>一致性提交</h3><p>全局复验通过后一次提交所有快照；失败则保留旧基线并输出可恢复报告。</p></div>
+    </div>
+  </section>
+
+  <section class="section card">
+    <h2>分阶段路线</h2>
+    <table class="table"><thead><tr><th>阶段</th><th>主要工作</th><th>退出标准</th></tr></thead><tbody>
+      <tr><td><strong>P0 止血</strong></td><td>删除矩阵、原子复制、失败不提交快照、同步锁、路径/链接/大小写校验。</td><td>故障注入不丢旧文件；删除、失败恢复、并发测试通过。</td></tr>
+      <tr><td><strong>P1 语义收敛</strong></td><td>role 驱动 backup、plan ID、冲突中心、版本化快照、三节点全局规划。</td><td>节点顺序无关，重复执行幂等，计划变化需重新确认。</td></tr>
+      <tr><td><strong>P1/P2 性能</strong></td><td>单次扫描、metadata 快速路径、hash 缓存、取消和结构化日志。</td><td>每轮每节点最多一次全量扫描，未变化文件不重复读内容。</td></tr>
+      <tr><td><strong>P2/P3 发布</strong></td><td>CI、跨平台产物校验、配置/快照迁移、诊断包和回滚说明。</td><td>构建、升级、故障诊断流程可重复。</td></tr>
+    </tbody></table>
+  </section>
+
+  <section class="section card">
+    <h2>建议新增的最小测试集</h2>
+    <p><code>TestMirrorDeletePropagatesOnce</code>、<code>TestApplyFailureDoesNotCommitSnapshot</code>、<code>TestAtomicCopyKeepsOldTargetOnFailure</code>、<code>TestBackupUsesRolesNotNodeOrder</code>、<code>TestThreeNodeMirrorIsOrderIndependent</code>、<code>TestRejectSameAndNestedRoots</code>、<code>TestRejectCaseCollision</code>、<code>TestSymlinkDoesNotEscapeRoot</code>、<code>TestConcurrentSyncReturnsConflict</code>、<code>TestPlanIdRejectedAfterFilesystemChange</code>、<code>TestCorruptSnapshotEntersRecoveryMode</code>。</p>
+  </section>
+
+  <section class="section card">
+    <h2>结论</h2>
+    <p>项目骨架和产品方向是合理的，当前主要问题集中在同步事务边界，而不是 UI 或依赖。建议暂停新增大功能，先完成 P0 与关键 P1，使系统从“可演示 MVP”提升到“可用于真实数据的工具”。在修复完成前，建议仅对已有额外备份的数据使用，并始终先执行预览。</p>
+  </section>
+
+  <footer class="footer">变更记录：2026-08-13，首次生成本报告。对应 Markdown 版本：<code>项目缺陷与优化分析报告.md</code>。</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiaoSync 第一性原理目标达成分析报告</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2333; --ink2:#4a5568; --ink3:#8492a6;
+    --line:#e4e8ee; --brand:#0e9f8a; --brand-soft:#e3f5f2;
+    --red:#d64550; --red-soft:#fdeeee; --green:#2e9e5b; --green-soft:#e9f6ee;
+    --amber:#d9871e; --amber-soft:#fdf3e3; --blue:#3b6fd4; --blue-soft:#ecf2fd;
+    --purple:#7a5af8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;font-size:16px;line-height:1.75;padding:32px 16px 80px}
+  .wrap{max-width:1020px;margin:0 auto}
+  .hero{background:linear-gradient(135deg,#0e9f8a,#0b7d74);color:#fff;border-radius:18px;padding:38px 42px;margin-bottom:26px;box-shadow:0 8px 28px rgba(14,159,138,.22)}
+  .hero h1{font-size:30px;letter-spacing:1px;margin-bottom:8px}
+  .hero .sub{opacity:.92;font-size:15px}
+  .hero .meta{margin-top:16px;font-size:13px;opacity:.85;display:flex;gap:18px;flex-wrap:wrap}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:30px 34px;margin-bottom:22px;box-shadow:0 2px 10px rgba(28,35,51,.04)}
+  h2{font-size:22px;margin-bottom:18px;padding-left:14px;border-left:5px solid var(--brand);line-height:1.3}
+  h3{font-size:17.5px;margin:22px 0 10px;color:var(--ink)}
+  p{margin-bottom:12px;color:var(--ink2)}
+  ul,ol{margin:0 0 14px 22px;color:var(--ink2)}
+  li{margin-bottom:7px}
+  table{width:100%;border-collapse:collapse;margin:14px 0 18px;font-size:14.5px}
+  th{background:#f0f4f8;text-align:left;padding:10px 12px;border:1px solid var(--line);color:var(--ink);font-weight:600;white-space:nowrap}
+  td{padding:10px 12px;border:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+  tr:nth-child(even) td{background:#fafbfc}
+  .tag{display:inline-block;padding:2px 11px;border-radius:20px;font-size:12.5px;font-weight:600;white-space:nowrap}
+  .t-green{background:var(--green-soft);color:var(--green)}
+  .t-red{background:var(--red-soft);color:var(--red)}
+  .t-amber{background:var(--amber-soft);color:var(--amber)}
+  .t-blue{background:var(--blue-soft);color:var(--blue)}
+  .t-brand{background:var(--brand-soft);color:var(--brand)}
+  .verdict{display:flex;gap:26px;align-items:center;flex-wrap:wrap;background:var(--brand-soft);border:1.5px solid var(--brand);border-radius:14px;padding:24px 28px;margin-bottom:8px}
+  .verdict .score{font-size:52px;font-weight:800;color:var(--brand);line-height:1}
+  .verdict .vtext{flex:1;min-width:260px}
+  .verdict .vtext b{font-size:19px;color:var(--ink)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:16px 0}
+  .kpi{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:16px 18px;text-align:center}
+  .kpi .num{font-size:26px;font-weight:800;color:var(--brand)}
+  .kpi .lbl{font-size:13px;color:var(--ink3);margin-top:4px}
+  .callout{border-radius:12px;padding:16px 20px;margin:14px 0;font-size:15px}
+  .c-red{background:var(--red-soft);border-left:5px solid var(--red)}
+  .c-green{background:var(--green-soft);border-left:5px solid var(--green)}
+  .c-amber{background:var(--amber-soft);border-left:5px solid var(--amber)}
+  .c-blue{background:var(--blue-soft);border-left:5px solid var(--blue)}
+  .callout b{color:var(--ink)}
+  .formula{background:#0f1722;color:#7ee8d8;border-radius:12px;padding:20px 24px;font-family:"JetBrains Mono",Consolas,monospace;font-size:14.5px;line-height:2;margin:14px 0;overflow-x:auto}
+  .formula .cm{color:#5b6b80}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .quote{background:#f8fafc;border-left:4px solid var(--ink3);border-radius:0 10px 10px 0;padding:12px 18px;margin:10px 0;font-size:14px;color:var(--ink2);font-style:italic}
+  .quote .src{display:block;font-style:normal;font-size:12.5px;color:var(--ink3);margin-top:5px}
+  .bar-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;font-size:14px}
+  .bar-row .name{width:150px;text-align:right;color:var(--ink2);flex-shrink:0}
+  .bar-row .bar{height:26px;border-radius:6px;background:linear-gradient(90deg,#0e9f8a,#2bbfa9);display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-weight:700;font-size:12.5px;min-width:44px}
+  .bar-row .bar.alt{background:linear-gradient(90deg,#3b6fd4,#6b95e8)}
+  .bar-row .bar.alt2{background:linear-gradient(90deg,#7a5af8,#a58bfa)}
+  .roadmap{display:flex;gap:0;flex-wrap:wrap;margin:16px 0}
+  .phase{flex:1;min-width:200px;border:1.5px solid var(--line);border-radius:12px;padding:16px 18px;margin:6px;background:#fff;position:relative}
+  .phase.done{border-color:var(--green);background:var(--green-soft)}
+  .phase.now{border-color:var(--red);background:var(--red-soft)}
+  .phase.next{border-color:var(--amber);background:var(--amber-soft)}
+  .phase h4{font-size:15px;margin-bottom:6px}
+  .phase p{font-size:13px;margin:0}
+  .foot{text-align:center;color:var(--ink3);font-size:13px;margin-top:36px}
+  .toc{columns:2;column-gap:40px;font-size:15px}
+  .toc li{margin-bottom:6px;list-style:none}
+  .toc a{color:var(--brand);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  @media(max-width:600px){.toc{columns:1}}
+  small.src{color:var(--ink3);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="hero">
+  <h1>🐱 MiaoSync 第一性原理目标达成分析报告</h1>
+  <div class="sub">从本质需求出发，结合市场大数据与社区真实反馈，回答一个问题：这个项目能不能做成？</div>
+  <div class="meta">
+    <span>📅 报告日期：2026-10-10</span>
+    <span>🎯 分析对象：MiaoSync（Win / Mac / 移动硬盘 三端无云同步备份工具）</span>
+    <span>📚 数据来源：项目源码与文档、市场研究报告、GitHub / Reddit / 中文社区用户反馈</span>
+  </div>
+</div>
+
+<!-- ============ 0. 结论先行 ============ -->
+<div class="card" id="summary">
+  <h2>〇、结论先行（Executive Summary）</h2>
+  <div class="verdict">
+    <div class="score">7.5<span style="font-size:20px;color:var(--ink3)">/10</span></div>
+    <div class="vtext">
+      <b>目标可达成 ✅ —— 方向正确、赛道真实、架构可行；但「可托付真实数据」尚有 4 个 P0 级工程债必须先还。</b>
+      <p style="margin-top:8px">MiaoSync 选择的「无云 + 移动硬盘摆渡」定位，恰好落在 Syncthing / Resilio（需双机同时在线联网）与 FreeFileSync（手动、体验陈旧）都覆盖不到的真实空白区。社区反馈证明这个痛点普遍存在且长期未被很好解决。项目 MVP 已验证了技术可行性，剩余差距集中在<b>同步内核的事务安全性</b>——工作量有限（引擎核心约千行级 Go 代码），不改变架构即可修复。主要风险不在技术，而在单维护者的持续投入与成熟免费竞品的替代压力。</p>
+    </div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="num">$47 亿</div><div class="lbl">2025 全球文件同步市场规模（USD）</div></div>
+    <div class="kpi"><div class="num">7.8–18%</div><div class="lbl">市场年复合增长率（CAGR 至 2035）</div></div>
+    <div class="kpi"><div class="num">88K ⭐</div><div class="lbl">标杆开源项目 Syncthing GitHub Star（验证需求强度）</div></div>
+    <div class="kpi"><div class="num">4 项</div><div class="lbl">阻断「真实数据可用」的 P0 缺陷（均有明确修复方案）</div></div>
+  </div>
+  <div class="toc">
+    <li><a href="#fpr">一、第一性原理：把「三端同步」拆到不可再拆</a></li>
+    <li><a href="#market">二、大数据验证：市场与需求是否真实存在</a></li>
+    <li><a href="#community">三、社区反馈：用户真正痛在哪</a></li>
+    <li><a href="#compete">四、竞品格局：MiaoSync 的生态位</a></li>
+    <li><a href="#matrix">五、目标达成度逐项评估</a></li>
+    <li><a href="#risk">六、风险与关键假设</a></li>
+    <li><a href="#path">七、达成路径与里程碑</a></li>
+    <li><a href="#conclusion">八、最终结论</a></li>
+  </div>
+</div>
+
+<!-- ============ 1. 第一性原理 ============ -->
+<div class="card" id="fpr">
+  <h2>一、第一性原理：把「三端同步」拆到不可再拆</h2>
+  <p>不看竞品、不看惯例，只从问题本质推导。MiaoSync 要解决的问题，其最简形式是：</p>
+  <div class="formula">
+    <span class="cm">// 问题的第一性表达</span><br>
+    存在 N 个数据副本 R₁..Rₙ（Win / Mac / HDD），它们<b style="color:#ffd166">不同时在线</b>，<br>
+    通过「人工搬运的物理介质」间接通信（延迟容忍网络 / Sneakernet）。<br><br>
+    求：一个协议，使任意时刻任意副本接入后，<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;所有副本最终收敛到一致状态（Eventual Consistency），<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;且 <b style="color:#ff8fa3">任何故障路径下数据损失 = 0</b>。
+  </div>
+
+  <h3>1.1 由此推导出的 6 条不可约需求</h3>
+  <table>
+    <tr><th style="width:44px">#</th><th>不可约需求</th><th>推导依据（为什么绕不开）</th><th style="width:150px">MiaoSync 现状</th></tr>
+    <tr>
+      <td>R1</td><td><b>变更检测</b>：识别「新增 / 修改 / 删除」</td>
+      <td>不同步不知道变了什么，就只能全量复制——违背「增量」本质。exFAT 时间精度仅 2 秒，<b>必须内容哈希兜底</b>。</td>
+      <td><span class="tag t-green">✅ 已实现</span><br>SHA-256 + 快照，设计正确</td>
+    </tr>
+    <tr>
+      <td>R2</td><td><b>冲突不可静默覆盖</b></td>
+      <td>副本不同时在线 ⇒ 同一文件必被两端各自修改 ⇒ 冲突是「必然事件」而非异常。静默覆盖 = 数据损失，违背目标函数。</td>
+      <td><span class="tag t-green">✅ 已实现</span><br>rename/keep/newer 三策略 + .conflict 副本</td>
+    </tr>
+    <tr>
+      <td>R3</td><td><b>写入原子性</b>：任意时刻断电/拔盘，旧文件或新文件至少其一完整</td>
+      <td>移动硬盘场景「中途拔盘」是常态操作而非边缘 case。非原子写 ⇒ 半文件 ⇒ 不可逆损坏。</td>
+      <td><span class="tag t-red">❌ 未达成</span><br>os.Create 先截断后复制（P0-3）</td>
+    </tr>
+    <tr>
+      <td>R4</td><td><b>失败可恢复</b>：失败的 run 不得污染「上次成功基线」</td>
+      <td>快照是唯一的事实来源（source of truth）。失败也写快照 ⇒ 基线腐化 ⇒ 后续所有 diff 全部失真，可能反向覆盖正确文件。</td>
+      <td><span class="tag t-red">❌ 未达成</span><br>动作失败仍提交快照（P0-2）</td>
+    </tr>
+    <tr>
+      <td>R5</td><td><b>单路径单决策</b>：一个文件一次 run 只能有一个最终动作</td>
+      <td>「恢复复制」与「删除传播」两个互不知情的阶段作用于同一路径 ⇒ 行为依赖动作顺序 ⇒ 结果不确定。不确定 = 不可信任。</td>
+      <td><span class="tag t-red">❌ 未达成</span><br>删除场景同时生成复制+删除（P0-1）</td>
+    </tr>
+    <tr>
+      <td>R6</td><td><b>幂等与互斥</b>：重复执行结果相同；并发执行被禁止</td>
+      <td>Web 服务天然并发；两个 run 同时写同一快照文件 ⇒ 状态损坏。幂等性是「可预测性」的数学定义。</td>
+      <td><span class="tag t-red">❌ 未达成</span><br>无全局运行锁（P0-4）</td>
+    </tr>
+  </table>
+
+  <div class="callout c-blue">
+    <b>关键洞察：</b>6 条不可约需求中，MiaoSync 已达成 2 条（且是设计上最容易做错的 2 条——选对了哈希路线、选对了「永不静默覆盖」原则）。未达成的 4 条全部集中在<b>事务边界</b>这一件事上：它们不是 4 个独立 bug，而是同一个缺失——「同步内核缺少事务语义」——的 4 种表现。这意味着修复是<b>收敛的</b>：引入「单路径决策矩阵 + 原子写协议 + journal 化快照提交 + 全局运行锁」一个内核重构即可全部关闭。这正是 2026-08 缺陷分析报告「阶段 A」的内容，工作量估算为引擎层一次集中重构（1–2 个迭代周期），<b>不涉及架构推翻</b>。
+  </div>
+
+  <h3>1.2 「无云 + 硬盘摆渡」是不是一个成立的解？</h3>
+  <p>从第一性原理看，三端一致性只有三类物理通道：</p>
+  <table>
+    <tr><th>通道</th><th>代表</th><th>物理约束</th><th>用户代价</th></tr>
+    <tr><td>云端中转</td><td>iCloud / OneDrive / 百度网盘</td><td>数据出设备，依赖服务商存续与良心</td><td>订阅费 + 隐私让渡 + 容量墙</td></tr>
+    <tr><td>网络直连（P2P）</td><td>Syncthing / Resilio</td><td><b>两端必须同时在线且网络可达</b>（NAT 穿透是著名痛点）</td><td>配置心智成本高；异地/异时场景失效</td></tr>
+    <tr><td>物理介质摆渡</td><td><b>MiaoSync 选择的路线</b></td><td>依赖人工插拔，同步是「事件」而非「流」</td><td>需养成插盘习惯；无其他硬性约束</td></tr>
+  </table>
+  <p>三条通道在物理上互补、互不替代。对于「家 Mac ↔ 公司 Win」这种<b>永不同时在线</b>的双机场景，P2P 在物理上无解（除非引入第三台常开设备当枢纽），云是唯一竞品——而云恰恰是目标用户主动拒绝的。<b>硬盘摆渡不是妥协方案，而是该约束条件下的唯一本地解。</b>MiaoSync 的问题定义在逻辑上是自洽且必要的。</p>
+</div>
+
+<!-- ============ 2. 市场大数据 ============ -->
+<div class="card" id="market">
+  <h2>二、大数据验证：市场与需求是否真实存在</h2>
+
+  <h3>2.1 市场规模：大盘持续增长</h3>
+  <div class="bar-row"><div class="name">2024 全球文件同步服务</div><div class="bar alt" style="width:38%">$43.7 亿</div></div>
+  <div class="bar-row"><div class="name">2025（基年）</div><div class="bar alt" style="width:41%">$47.1 亿</div></div>
+  <div class="bar-row"><div class="name">2035（预测）</div><div class="bar" style="width:88%">$100 亿+</div></div>
+  <p><small class="src">数据源：WiseGuy Reports《Global File Synchronization Service Market》（2026 版）：2025 年 $47.1 亿 → 2035 年 $100 亿，CAGR 7.8%。另一口径 Market Research Intellect 给出 2025 年 $48.4 亿 → 2035 年 $253.2 亿、CAGR 18%。两份报告口径不同但方向一致：<b>同步需求是持续扩张的结构性市场</b>，驱动力为远程办公、多设备持有率、数据安全焦虑。</small></p>
+
+  <h3>2.2 需求强度：「拒绝云」是被反复验证的真实人群</h3>
+  <div class="bar-row"><div class="name">Syncthing（Go，P2P）</div><div class="bar" style="width:80%">88K ⭐</div></div>
+  <div class="bar-row"><div class="name">FreeFileSync（手动对比同步）</div><div class="bar alt2" style="width:46%">长青 15 年</div></div>
+  <div class="bar-row"><div class="name">rclone / rsync（CLI 系）</div><div class="bar alt" style="width:55%">技术圈标配</div></div>
+  <p><small class="src">Syncthing GitHub Star 从 2025 年初的 ~69K 增长至 2026 年的 ~88K（多个中文技术媒体跟踪报道），12 年持续发版。一个「不联网、无公司、零营销」的开源同步工具达到此量级，证明「数据主权 + 不依赖云」是规模化的强需求，而非极客小众癖好。</small></p>
+
+  <div class="callout c-green">
+    <b>大数据侧结论：</b>① 市场大盘增长确定；② 「无云派」用户群已被 Syncthing 的 88K star 量化验证；③ 个人用户占个人云市场 74.8% 份额（PW Consulting 2025），说明 C 端个人同步是主战场。<b>MiaoSync 要服务的人群真实存在且足够大。</b>
+  </div>
+</div>
+
+<!-- ============ 3. 社区反馈 ============ -->
+<div class="card" id="community">
+  <h2>三、社区反馈：用户真正痛在哪</h2>
+  <p>汇总 Reddit、Syncthing 官方论坛、中文技术社区（知乎 / CSDN / 个人博客）的真实用户声音，痛点高度收敛为五条——逐条对照 MiaoSync 的设计响应：</p>
+
+  <table>
+    <tr><th style="width:200px">社区高频痛点</th><th>典型用户原声（转述/引用）</th><th>MiaoSync 的对应设计</th><th style="width:120px">是否接住</th></tr>
+    <tr>
+      <td><b>① 双机必须同时在线</b>（P2P 的物理死穴）</td>
+      <td class="quote">「设备必须同时可达才能同步，因为没有云端副本在中间等待。」<span class="src">— Syncthing 教程类文章的普遍警告</span></td>
+      <td>硬盘即「离线中转站」，拔插之间完成摆渡，<b>物理上不要求同时在线</b></td>
+      <td><span class="tag t-green">✅ 完美接住</span></td>
+    </tr>
+    <tr>
+      <td><b>② 删除/损坏瞬间传播到所有设备</b></td>
+      <td class="quote">「在一台机器上删了文件，它就在所有设备上消失……Syncthing 不是备份系统。」<span class="src">— opensourcealternatives.to / mustafaerbay 评测</span></td>
+      <td>危险删除保护（&gt;50 个或 &gt;30% 中止）+ 冲突副本永不静默覆盖 + backup 单向模式</td>
+      <td><span class="tag t-amber">🟡 设计接住<br>实现待 P0 修复</span></td>
+    </tr>
+    <tr>
+      <td><b>③ 冲突副本散落各处、无人收拾</b></td>
+      <td class="quote">「两边同时改同一文件，它就丢一个 .sync-conflict 文件在旁边，留给你自己整理。」<span class="src">— structurebeatsmagic.com 评测</span></td>
+      <td>冲突策略三选 + 路线图含「冲突副本可视化找回入口」（Phase 7）</td>
+      <td><span class="tag t-amber">🟡 部分接住</span></td>
+    </tr>
+    <tr>
+      <td><b>④ 大目录首次全量哈希慢到劝退</b></td>
+      <td class="quote">「数百 GB 的文件夹，仅哈希阶段就要数小时。」<span class="src">— Syncthing 用户共识</span></td>
+      <td>同样全量 SHA-256，且当前实现每对节点重复扫描（P1-7）——<b>比 Syncthing 更慢</b></td>
+      <td><span class="tag t-red">❌ 未接住<br>（阶段 C 优化项）</span></td>
+    </tr>
+    <tr>
+      <td><b>⑤ 自动同步工具「全军覆没」，老工具体验陈旧</b></td>
+      <td class="quote">「目前自动的同步应该算全军覆没了。」「FreeFileSync 界面像 Windows 95，而且靠文件大小比对，文件损坏它发现不了。」<span class="src">— 中文社区（ted423 博客 / bundl.run 评测）</span></td>
+      <td>内容哈希可发现损坏（对 FreeFileSync 的代际优势）；内嵌现代 Web GUI + 同步完成可视化报告（对陈旧 UI 的代际优势）</td>
+      <td><span class="tag t-green">✅ 差异化接住</span></td>
+    </tr>
+  </table>
+
+  <div class="callout c-green">
+    <b>社区侧结论：</b>五条高频痛点中，MiaoSync 的产品定义正面回应了三条（同时在线约束、损坏检测、现代体验），其中「① 同时在线」是<b>竞品物理上无法跟进</b>的结构性优势——Syncthing/Resilio 的 P2P 架构决定了它们永远需要网络，而这正是硬盘摆渡路线存在的意义。痛点 ④（性能）是待还的债，痛点 ②③ 取决于 P0 修复能否落地。<b>需求侧没有发现任何「这个工具不该存在」的信号。</b>
+  </div>
+</div>
+
+<!-- ============ 4. 竞品格局 ============ -->
+<div class="card" id="compete">
+  <h2>四、竞品格局：MiaoSync 的生态位</h2>
+  <table>
+    <tr><th>维度</th><th>Syncthing</th><th>FreeFileSync</th><th>Resilio Sync</th><th>云盘（iCloud/百度）</th><th style="background:var(--brand-soft)"><b>MiaoSync</b></th></tr>
+    <tr><td><b>不要求同时在线</b></td><td>❌ 物理上不可能</td><td>✅（本地对比）</td><td>❌</td><td>✅</td><td style="background:var(--brand-soft)">✅ 硬盘摆渡</td></tr>
+    <tr><td><b>数据不出设备</b></td><td>✅</td><td>✅</td><td>✅（但经中继发现）</td><td>❌</td><td style="background:var(--brand-soft)">✅</td></tr>
+    <tr><td><b>内容级损坏检测</b></td><td>✅ 哈希</td><td>❌ 主要靠大小/时间</td><td>✅</td><td>✅</td><td style="background:var(--brand-soft)">✅ SHA-256</td></tr>
+    <tr><td><b>危险删除保护</b></td><td>❌ 删除即时传播</td><td>🟡 靠人工预览</td><td>❌</td><td>🟡 回收站</td><td style="background:var(--brand-soft)">✅ 阈值中止+二次确认</td></tr>
+    <tr><td><b>GUI 现代度</b></td><td>🟡 Web UI 工程风</td><td>❌ 陈旧</td><td>✅</td><td>✅</td><td style="background:var(--brand-soft)">✅ 现代 Web GUI + 可视化报告</td></tr>
+    <tr><td><b>零配置上手</b></td><td>❌ Device ID 心智负担</td><td>🟡</td><td>🟡</td><td>✅</td><td style="background:var(--brand-soft)">✅ 双击 exe 即用</td></tr>
+    <tr><td><b>实时连续同步</b></td><td>✅ 核心优势</td><td>❌</td><td>✅</td><td>✅</td><td style="background:var(--brand-soft)">❌ 事件式（路线图的插盘触发可部分补）</td></tr>
+    <tr><td><b>成熟度/社区</b></td><td>✅✅ 12 年 / 88K★</td><td>✅✅ 15 年</td><td>✅ 商业产品</td><td>✅✅</td><td style="background:var(--brand-soft)">❌ 单人 MVP</td></tr>
+  </table>
+
+  <div class="grid2">
+    <div class="callout c-green" style="margin:0">
+      <b>生态位结论：</b>「无云 + 不要求同时在线 + 现代体验 + 防呆保护」四象限的交集中，<b>当前没有占位者</b>。Syncthing 放弃「不同时在线」，FreeFileSync 放弃「现代体验与哈希检测」，云盘放弃「数据不出设备」。MiaoSync 的定位在逻辑上成立。
+    </div>
+    <div class="callout c-amber" style="margin:0">
+      <b>诚实的边界：</b>生态位成立 ≠ 市场份额。这是一个<b>真实的窄缝市场（niche）</b>——适合做成「个人与极客圈中口碑级的小而美工具」（对标 Syncthing 早期的成长路径），不应以「击败 Syncthing」为目标函数。单维护者 + 免费成熟竞品的现实决定了：合理目标是成为该场景下的首选，而非全场景霸主。
+    </div>
+  </div>
+</div>
+
+<!-- ============ 5. 目标达成度矩阵 ============ -->
+<div class="card" id="matrix">
+  <h2>五、目标达成度逐项评估</h2>
+  <p>以 README 声明的目标为验收标准，逐项核对：</p>
+  <table>
+    <tr><th>项目自述目标</th><th style="width:110px">达成状态</th><th>依据</th></tr>
+    <tr><td>三端（Win/Mac/HDD）目录保持一致</td><td><span class="tag t-amber">🟡 部分达成</span></td><td>两节点基础场景可用（测试通过）；三节点链式与删除传播存在 P0-1 缺陷，结果可能不一致</td></tr>
+    <tr><td>不依赖云服务，数据在自己设备流转</td><td><span class="tag t-green">✅ 达成</span></td><td>仅监听 127.0.0.1，零网络依赖，纯本地文件操作</td></tr>
+    <tr><td>插上硬盘就能同步（GUI 开箱即用）</td><td><span class="tag t-green">✅ 达成</span></td><td>单 exe 双击启动、自动开浏览器、原生文件夹选择对话框（三平台兜底）</td></tr>
+    <tr><td>增量同步（只动变化部分）</td><td><span class="tag t-green">✅ 达成（性能待优化）</span></td><td>SHA-256 + 快照 diff 逻辑正确；但每 pair 重复全量扫描（P1-7），大目录体验差</td></tr>
+    <tr><td>永不静默覆盖（冲突留副本）</td><td><span class="tag t-green">✅ 达成</span></td><td>三策略 + .conflict-时间戳 副本，测试覆盖 rename 策略</td></tr>
+    <tr><td>危险操作保护（防误清空）</td><td><span class="tag t-green">✅ 达成</span></td><td>50 个 / 30% 双阈值中止 + GUI 二次确认</td></tr>
+    <tr><td><b>隐含目标：可托付真实数据（备份工具的信任底线）</b></td><td><span class="tag t-red">❌ 未达成</span></td><td>P0-2/3/4：失败污染快照、非原子写、无并发锁——2026-08 缺陷报告明确「不适合承载唯一副本」</td></tr>
+    <tr><td>路线图：加密 / 插盘触发 / 定时 / 断点续传</td><td><span class="tag t-amber">🟡 未开始（排序正确）</span></td><td>均排在 Phase 6+；在 P0 修复前不启动是正确决策</td></tr>
+  </table>
+  <div class="kpis">
+    <div class="kpi"><div class="num" style="color:var(--green)">5/8</div><div class="lbl">明示目标已达成</div></div>
+    <div class="kpi"><div class="num" style="color:var(--amber)">2/8</div><div class="lbl">部分达成 / 正确排序中</div></div>
+    <div class="kpi"><div class="num" style="color:var(--red)">1/8</div><div class="lbl">未达成——且是最关键的信任底线</div></div>
+  </div>
+</div>
+
+<!-- ============ 6. 风险 ============ -->
+<div class="card" id="risk">
+  <h2>六、风险与关键假设</h2>
+  <table>
+    <tr><th style="width:60px">级别</th><th>风险</th><th>影响</th><th>缓解</th></tr>
+    <tr><td><span class="tag t-red">高</span></td><td><b>在 P0 修复前被早期用户用于真实数据</b>，一次丢数据事故即可摧毁口碑</td><td>同步工具的信任是单次否决制——丢一次，永不再用，且会公开传播</td><td>README/界面显著位置加「MVP 期间请勿用于唯一副本」警示；优先闭环阶段 A</td></tr>
+    <tr><td><span class="tag t-red">高</span></td><td><b>单维护者可持续性</b></td><td>个人项目年存活率天然偏低；用户数据工具对维护连续性要求极高</td><td>保持代码小而精（当前单一依赖 yaml.v3 是正确选择）；完善的测试与文档降低未来接手成本</td></tr>
+    <tr><td><span class="tag t-amber">中</span></td><td><b>竞品下探</b>：Syncthing 增加「可移动介质节点」或 FreeFileSync 现代化</td><td>生态位被压缩</td><td>Syncthing 的 P2P 架构决定其转型成本高；MiaoSync 应加快建立「硬盘摆渡 = MiaoSync」的心智先发</td></tr>
+    <tr><td><span class="tag t-amber">中</span></td><td><b>exFAT / 三平台文件系统边界 case</b>（大小写、时间精度、符号链接）</td><td>目前已识别 P1-4/5 类缺陷，真实环境比测试环境更脏</td><td>阶段 C 的真实文件系统验证矩阵（NTFS/APFS/exFAT）</td></tr>
+    <tr><td><span class="tag t-amber">中</span></td><td><b>杀软误报与文件锁</b>（仓库已积累 4 个被 Defender 锁定删不掉的旧 exe）</td><td>分发与更新体验受损</td><td>发布渠道规范化（dist/版本目录 + checksum）；考虑代码签名</td></tr>
+    <tr><td><span class="tag t-blue">低</span></td><td>移动硬盘使用习惯随云普及而萎缩</td><td>目标人群缓慢缩小</td><td>市场数据（CAGR 7.8–18%）与 Syncthing 增长曲线均反向证伪；隐私焦虑反而在扩大无云人群</td></tr>
+  </table>
+  <div class="callout c-amber">
+    <b>关键假设检验：</b>整个分析成立依赖一个假设——「存在足够多拒绝云、且愿意用硬盘摆渡的人」。证据：Syncthing 88K★ 证明「拒绝云」成规模；FreeFileSync 15 年长青证明「本地文件夹同步」需求持久；中文社区「自动同步全军覆没」的吐槽证明现有方案未满足。<b>假设成立，但人群规模上限是「十万级用户」而非「千万级」</b>——这决定了项目的合理成功定义。
+  </div>
+</div>
+
+<!-- ============ 7. 路径 ============ -->
+<div class="card" id="path">
+  <h2>七、达成路径与里程碑</h2>
+  <div class="roadmap">
+    <div class="phase done"><h4>✅ MVP（已完成）</h4><p>验证可行性：单 exe + Web GUI + 哈希增量 + 冲突保护 + 可视化报告。技术路线被证明可行。</p></div>
+    <div class="phase now"><h4>🔴 里程碑 1：可信内核（当前唯一重点）</h4><p>完成缺陷报告「阶段 A」：单路径决策矩阵、原子写协议、失败不提交快照、全局运行锁、路径合法性校验。<b>退出标准：故障注入测试不丢文件。</b>完成后打 v0.1.0。</p></div>
+    <div class="phase next"><h4>🟡 里程碑 2：语义收敛 + 真实环境验证</h4><p>角色驱动 backup 拓扑、不可变 plan ID、版本化快照、NTFS/APFS/exFAT 实测矩阵、三节点顺序无关性。完成后打 v0.2.0，<b>此时方可摘掉「勿用于唯一副本」警示</b>。</p></div>
+    <div class="phase next"><h4>🟢 里程碑 3：差异化放大</h4><p>性能（每节点单轮扫描 + mtime 快速路径）→ 插盘自动触发（对 FreeFileSync 的致命一击）→ 静态加密备份（age）→ 冲突找回中心。逐项对应社区痛点 ②③④。</p></div>
+  </div>
+  <div class="callout c-blue">
+    <b>资源投入的杠杆点：</b>按缺陷报告估算，里程碑 1 的核心改动集中在 <code style="background:#eef;padding:1px 6px;border-radius:5px">internal/sync</code> 一个包（engine.go 约 400 行重构 + 12 个新增测试）。这是全项目<b>投入产出比最高的一段工作</b>——它直接把项目从「可演示」推过「可信任」的临界点，也是所有后续功能的地基。建议暂停一切新功能直到其完成。
+  </div>
+</div>
+
+<!-- ============ 8. 结论 ============ -->
+<div class="card" id="conclusion">
+  <h2>八、最终结论</h2>
+  <ol>
+    <li><b>目标在逻辑上成立（第一性原理 ✅）：</b>「双机永不同时在线 + 拒绝云」的约束下，硬盘摆渡是物理上的唯一本地解。问题定义自洽，6 条不可约需求中 2 条关键设计（哈希路线、永不静默覆盖）已做<b>对</b>。</li>
+    <li><b>需求被市场与社区双重验证（大数据 ✅）：</b>同步市场 $47 亿且年增 7.8–18%；Syncthing 88K★ 量化了「无云派」人群；社区五大痛点中 MiaoSync 正面回应三条，其中「不要求同时在线」是竞品架构上无法跟进的结构性优势。</li>
+    <li><b>工程现实：距离「可托付真实数据」差一个内核事务重构（⚠️ 有界差距）：</b>4 个 P0 缺陷同源（缺事务语义），修复路径明确、工作量有界（单包重构 + 12 个测试），不推翻架构。这不是「能不能」的问题，是「排期」的问题。</li>
+    <li><b>成功定义要现实：</b>合理目标不是击败 Syncthing，而是成为「无云硬盘摆渡」场景的首选工具（十万级用户上限的窄缝市场）。以 Syncthing 早期路径为参照，这个量级的成功对个人开源项目完全可达。</li>
+  </ol>
+  <div class="verdict" style="margin-top:18px">
+    <div class="score">✅</div>
+    <div class="vtext">
+      <b>最终判定：项目可以达成目标。</b>
+      <p style="margin-top:6px">前提是：<b>下一步只做一件事——完成「可信内核」里程碑（阶段 A 的 5 项 P0 修复），之后用 v0.2.0 摘掉安全警示。</b>在此之前，所有新功能（加密、自动触发、断点续传）都应继续排队。方向已经对了，现在需要的是把地基打到配得上「备份」二字。</p>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  🐱 MiaoSync 第一性原理目标达成分析报告 · 2026-10-10 · 数据截至报告日<br>
+  内部依据：项目源码 / README / design.md / roadmap.md / 2026-08-13 缺陷与优化分析报告 ·
+  外部依据：WiseGuy Reports、Market Research Intellect、PW Consulting、GitHub、Syncthing 论坛、Reddit 及中文技术社区公开评测
+</div>
+
+</div>
+</body>
+</html>

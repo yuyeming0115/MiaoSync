@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MiaoSync · 同步完成报告（矩阵布局预览）</title>
+<style>
+  :root {
+    --bg:#0b1015; --bg-card:#161f28; --bg-input:#0d141b; --border:#263442;
+    --text:#e6edf3; --text-dim:#8b98a5; --accent:#2dd4bf; --accent-warm:#f59e0b;
+    --copy:#38bdf8; --del:#f87171; --conf:#fbbf24; --danger:#ef4444;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; font-family:-apple-system,"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;
+    background:radial-gradient(1200px 600px at 80% -10%, #16323a 0%, var(--bg) 55%);
+    color:var(--text); display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  .note { position:fixed; top:14px; left:50%; transform:translateX(-50%); font-size:12px; color:var(--text-dim);
+    background:rgba(11,16,21,.7); border:1px solid var(--border); padding:6px 14px; border-radius:999px; }
+
+  .report-card {
+    width:min(760px,94vw); background:linear-gradient(180deg,#18222d 0%,var(--bg-card) 60%);
+    border:1px solid var(--border); border-radius:18px; padding:24px 26px; box-shadow:0 24px 70px rgba(0,0,0,.55);
+  }
+
+  /* 头部：标题在左，元数据在右 */
+  .report-head { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:22px; }
+  .report-title-block { display:flex; align-items:center; gap:14px; }
+  .report-head .ico { font-size:44px; line-height:1; filter:drop-shadow(0 2px 6px rgba(45,212,191,.3)); }
+  .report-head .title { font-size:25px; font-weight:700; margin:0; }
+  .report-head .sub { margin:5px 0 0; font-size:14px; color:var(--text-dim); }
+  .report-head.is-warn .ico { filter:drop-shadow(0 2px 6px rgba(245,158,11,.45)); }
+
+  .report-meta-row { display:flex; flex-wrap:wrap; gap:9px 14px; font-size:13.5px; color:var(--text-dim); }
+  .report-meta-row .m { display:inline-flex; align-items:baseline; gap:6px; background:var(--bg-input); border:1px solid var(--border); padding:6px 12px; border-radius:9px; font-size:13.5px; }
+  .report-meta-row b { color:var(--text); font-weight:600; }
+
+  /* 主体：1×2 矩阵 */
+  .report-body { display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:stretch; }
+  @media (max-width:620px){ .report-body{grid-template-columns:1fr;} }
+
+  /* 左侧：环形图 */
+  .report-chart { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+    background:var(--bg-input); border:1px solid var(--border); border-radius:16px; padding:22px 18px; }
+  .donut-track { fill:none; stroke:var(--bg-card); stroke-width:18; }
+  .donut-seg { fill:none; stroke-width:18; transition:stroke-dasharray .9s cubic-bezier(.4,0,.2,1); }
+  .donut-center-num { font-size:40px; font-weight:800; fill:var(--text); }
+  .donut-center-label { font-size:13.5px; fill:var(--text-dim); }
+  .report-legend { display:grid; grid-template-columns:1fr 1fr; gap:9px 14px; width:100%; }
+  .report-legend .lg { display:flex; align-items:center; gap:9px; font-size:14.5px; }
+  .report-legend .dot { width:12px; height:12px; border-radius:3px; flex:none; }
+  .report-legend .lg .n { margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums; }
+  .report-legend .lg .p { color:var(--text-dim); width:46px; text-align:right; font-variant-numeric:tabular-nums; }
+
+  /* 右侧：2×3 统计卡矩阵 */
+  .report-tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media (max-width:620px){ .report-tiles{grid-template-columns:repeat(2,1fr);} }
+  .tile { background:var(--bg-input); border:1px solid var(--border); border-radius:14px;
+    padding:20px 8px; text-align:center; min-height:104px; display:flex; flex-direction:column; justify-content:center; }
+  .tile .t-num { font-size:34px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .tile .t-lbl { margin-top:9px; font-size:13.5px; color:var(--text-dim); }
+  .tile.copy .t-num { color:var(--copy); }
+  .tile.delete .t-num { color:var(--del); }
+  .tile.conflict .t-num { color:var(--conf); }
+  .tile.skip .t-num { color:#94a3b8; }
+  .tile.error .t-num { color:var(--danger); }
+  .tile.total { background:rgba(45,212,191,.08); border-color:rgba(45,212,191,.35); }
+  .tile.total .t-num { color:var(--accent); }
+
+  .report-banner { margin-top:18px; padding:13px 16px; border-radius:12px;
+    border:1px solid rgba(245,158,11,.45); background:rgba(245,158,11,.1); color:#fbbf24; font-size:15px; line-height:1.65; }
+  .report-banner[hidden]{display:none;}
+  .report-banner b { color:#fde68a; }
+  .report-foot { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+
+  .btn { cursor:pointer; border:1px solid var(--border); background:#1f2a36; color:var(--text);
+    border-radius:10px; padding:11px 14px; font-size:14px; font-weight:600; font-family:inherit; }
+  .btn-run { background:var(--accent-warm); color:#2a1a02; border-color:var(--accent-warm); }
+
+  /* 传输明细列表 */
+  .report-detail { margin-top:18px; border:1px solid var(--border); border-radius:14px; background:var(--bg-input); padding:14px 16px; }
+  .detail-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+  .detail-title { font-size:15px; font-weight:700; }
+  .detail-title b { color:var(--accent); margin-left:4px; font-variant-numeric:tabular-nums; }
+  .detail-filters { display:flex; gap:6px; }
+  .chip { cursor:pointer; border:1px solid var(--border); background:var(--bg-card); color:var(--text-dim);
+    border-radius:999px; padding:4px 12px; font-size:12.5px; font-family:inherit; transition:all .15s; }
+  .chip:hover { color:var(--text); }
+  .chip.active { color:var(--text); border-color:var(--accent); background:rgba(45,212,191,.12); }
+  .detail-list { max-height:240px; overflow:auto; display:flex; flex-direction:column; gap:2px; }
+  .xrow { display:grid; grid-template-columns:24px 1fr auto; gap:10px; align-items:center; padding:7px 8px; border-radius:8px; }
+  .xrow:hover { background:var(--bg-card); }
+  .x-ico { font-size:15px; text-align:center; font-weight:700; }
+  .xrow.copy .x-ico { color:var(--copy); }
+  .xrow.delete .x-ico { color:var(--del); }
+  .xrow.conflict .x-ico { color:var(--conf); }
+  .xrow.skip .x-ico { color:#94a3b8; }
+  .xrow.error .x-ico { color:var(--danger); }
+  .xrow.error .x-name { color:var(--danger); }
+  .x-main { min-width:0; }
+  .x-name { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .x-path { font-size:11.5px; color:var(--text-dim); font-family:ui-monospace,Menlo,Consolas,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .x-size { font-size:12px; color:var(--text-dim); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .x-empty { padding:18px; text-align:center; color:var(--text-dim); font-size:13px; margin:0; }
+</style>
+</head>
+<body>
+  <div class="note">这是一份设计预览，数据为本工具真实运行后的示例汇总</div>
+  <div class="report-card">
+    <div id="reportHead" class="report-head"></div>
+    <div class="report-body">
+      <div class="report-chart">
+        <svg viewBox="0 0 180 180" width="180" height="180">
+          <circle class="donut-track" cx="90" cy="90" r="68"></circle>
+          <g id="reportSegments" transform="rotate(-90 90 90)"></g>
+          <text id="reportCenter" x="90" y="84" class="donut-center-num" text-anchor="middle">0</text>
+          <text x="90" y="106" class="donut-center-label" text-anchor="middle">总操作</text>
+        </svg>
+        <div id="reportLegend" class="report-legend"></div>
+      </div>
+      <div id="reportTiles" class="report-tiles"></div>
+    </div>
+    <section class="report-detail">
+      <div class="detail-head">
+        <span class="detail-title">📋 传输明细 <b id="detailCount">0</b></span>
+        <div class="detail-filters" id="detailFilters">
+          <button class="chip active" data-f="all">全部</button>
+          <button class="chip" data-f="copy">复制</button>
+          <button class="chip" data-f="delete">删除</button>
+          <button class="chip" data-f="conflict">冲突</button>
+        </div>
+      </div>
+      <div id="reportDetail" class="detail-list"></div>
+    </section>
+    <div id="reportBanner" class="report-banner" hidden></div>
+    <div class="report-foot">
+      <button class="btn btn-ghost">关闭</button>
+      <button class="btn btn-run" hidden>⚠️ 确认并执行危险操作</button>
+    </div>
+  </div>
+
+<script>
+  const SAMPLE = {
+    message:"同步完成", copied:6, deleted:2, conflicts:1, skipped:0, errors:0,
+    bytesCopied:13002342, durationMs:3412, requiresConfirm:false,
+    dangerousInfo:"", mode:"mirror", conflict:"rename",
+    nodes:["win-pc","移动硬盘(B)"],
+    transferred:[
+      {kind:"copy", from:"D:\\Sync\\Photos\\trip-01.jpg", to:"E:\\Sync\\Photos\\trip-01.jpg", size:2480120, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"copy", from:"D:\\Sync\\Photos\\trip-02.jpg", to:"E:\\Sync\\Photos\\trip-02.jpg", size:1988440, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"copy", from:"E:\\Sync\\Docs\\report.docx", to:"D:\\Sync\\Docs\\report.docx", size:88410, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"copy", from:"D:\\Sync\\Music\\song.flac", to:"E:\\Sync\\Music\\song.flac", size:7820100, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"copy", from:"E:\\Sync\\Videos\\clip.mp4", to:"D:\\Sync\\Videos\\clip.mp4", size:1100290, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"copy", from:"D:\\Sync\\Backup\\data.zip", to:"E:\\Sync\\Backup\\data.zip", size:475982, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"conflict", from:"D:\\Sync\\docs\\shared.md", to:"E:\\Sync\\docs\\shared.md", size:14220, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"delete", from:"", to:"E:\\Sync\\Temp\\old-note.txt", size:2048, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+      {kind:"delete", from:"", to:"D:\\Sync\\Temp\\draft.bak", size:5120, pair:"win-pc ↔ 移动硬盘(B)", status:"ok"},
+    ]
+  };
+  const SEG_DEFS = [
+    {key:"copied",label:"复制",color:"#38bdf8"},
+    {key:"deleted",label:"删除",color:"#f87171"},
+    {key:"conflicts",label:"冲突",color:"#fbbf24"},
+    {key:"skipped",label:"跳过",color:"#94a3b8"},
+  ];
+  const C = 2*Math.PI*68;
+  const fmtBytes = n => { if(!n) return "0 B"; const u=["B","KB","MB","GB","TB"]; let i=0,x=n;
+    while(x>=1024&&i<u.length-1){x/=1024;i++;} return (i===0?x:x.toFixed(x<10?2:1))+" "+u[i]; };
+  const fmtDur = ms => ms<1000 ? ms+" ms" : (ms/1000).toFixed(1)+" s";
+  const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const MODE={mirror:"双向镜像",backup:"单向备份"}, CONF={rename:"重命名备份",keep:"两端保留",newer:"仅留较新"};
+
+  const s=SAMPLE;
+  const head=document.getElementById("reportHead");
+  let icon="✅",title="同步完成",cls="";
+  if(s.requiresConfirm){icon="⚠️";title="需要确认危险操作";cls="is-warn";}
+  else if(s.errors>0){icon="⚠️";title="同步完成，有 "+s.errors+" 个错误";cls="is-warn";}
+  head.className="report-head "+cls;
+  head.innerHTML=
+    `<div class="report-title-block"><span class="ico">${icon}</span>`+
+    `<div><p class="title">${title}</p>`+
+    `<p class="sub">${esc(s.nodes.join(" ↔ "))} · ${new Date().toLocaleString()}</p></div></div>`+
+    `<div class="report-meta-row">`+
+    `<span class="m">⏱ 耗时 <b>${fmtDur(s.durationMs)}</b></span>`+
+    `<span class="m">📦 传输 <b>${fmtBytes(s.bytesCopied)}</b></span>`+
+    `<span class="m">🔄 模式 <b>${MODE[s.mode]||s.mode}</b></span>`+
+    `<span class="m">⚡ 冲突 <b>${CONF[s.conflict]||s.conflict}</b></span></div>`;
+
+  const segs=document.getElementById("reportSegments"); segs.innerHTML="";
+  const total=SEG_DEFS.reduce((a,d)=>a+(s[d.key]||0),0);
+  let acc=0; const circles=[];
+  SEG_DEFS.forEach(d=>{ const val=s[d.key]||0; const len=total>0?(val/total)*C:0;
+    const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("class","donut-seg"); c.setAttribute("cx","90"); c.setAttribute("cy","90"); c.setAttribute("r","68");
+    c.setAttribute("stroke",d.color); c.setAttribute("stroke-dasharray","0 "+C); c.setAttribute("stroke-dashoffset",String(-acc));
+    segs.appendChild(c); circles.push({el:c,len}); acc+=len; });
+  document.getElementById("reportCenter").textContent=total;
+  requestAnimationFrame(()=>circles.forEach(({el,len})=>el.setAttribute("stroke-dasharray",len+" "+C)));
+
+  const legend=document.getElementById("reportLegend"); legend.innerHTML="";
+  SEG_DEFS.forEach(d=>{ const val=s[d.key]||0; const pct=total>0?Math.round((val/total)*100)+"%":"0%";
+    const row=document.createElement("div"); row.className="lg";
+    row.innerHTML=`<span class="dot" style="background:${d.color}"></span><span>${d.label}</span>`+
+      `<span class="n">${val}</span><span class="p">${pct}</span>`; legend.appendChild(row); });
+
+  const tiles=[
+    {k:"copied",l:"复制",c:"copy"},{k:"deleted",l:"删除",c:"delete"},
+    {k:"conflicts",l:"冲突",c:"conflict"},{k:"skipped",l:"跳过",c:"skip"},
+    {k:"errors",l:"错误",c:"error"},{k:null,l:"总计",c:"total",val:total}
+  ];
+  const tw=document.getElementById("reportTiles"); tw.innerHTML="";
+  tiles.forEach(t=>{ const el=document.createElement("div"); el.className="tile "+t.c;
+    const num=t.val!=null?t.val:(s[t.k]||0);
+    el.innerHTML=`<div class="t-num">${num}</div><div class="t-lbl">${t.l}</div>`; tw.appendChild(el); });
+
+  const KIND_ICON={copy:"→",delete:"✕",conflict:"⇄",skip:"•"};
+  const KIND_LABEL={copy:"复制",delete:"删除",conflict:"冲突",skip:"跳过"};
+  const baseName=p=>{ if(!p) return ""; const i=Math.max(p.lastIndexOf("/"),p.lastIndexOf("\\")); return i>=0?p.slice(i+1):p; };
+  function renderDetail(items){
+    const wrap=document.getElementById("reportDetail");
+    document.getElementById("detailCount").textContent=items.length;
+    const filter=window.__detailFilter||"all";
+    wrap.innerHTML="";
+    const list=items.filter(it=>filter==="all"||it.kind===filter);
+    if(!list.length){ wrap.innerHTML=`<p class="x-empty">${filter==="all"?"本次同步无文件传输。":"没有"+(KIND_LABEL[filter]||"")+"操作记录"}</p>`; return; }
+    list.forEach(it=>{
+      const row=document.createElement("div");
+      row.className="xrow "+it.kind+(it.status==="error"?" error":"");
+      const target=it.kind==="delete"?it.to:it.to||it.from;
+      const name=baseName(target)||baseName(it.from||"");
+      const path=it.kind==="delete"?(it.to||""):(it.from||"")+"  →  "+(it.to||"");
+      const sizeTxt=it.status==="error"?"失败":fmtBytes(it.size);
+      row.innerHTML=`<div class="x-ico">${KIND_ICON[it.kind]||"•"}</div>`+
+        `<div class="x-main"><div class="x-name">${esc(name)}</div><div class="x-path">${esc(path)}</div></div>`+
+        `<div class="x-size">${sizeTxt}</div>`;
+      wrap.appendChild(row);
+    });
+  }
+  renderDetail(SAMPLE.transferred||[]);
+  document.querySelectorAll("#detailFilters .chip").forEach(el=>el.addEventListener("click",()=>{
+    document.querySelectorAll("#detailFilters .chip").forEach(c=>c.classList.remove("active"));
+    el.classList.add("active"); window.__detailFilter=el.dataset.f; renderDetail(SAMPLE.transferred||[]);
+  }));
+
+  const banner=document.getElementById("reportBanner");
+  if(s.requiresConfirm){ banner.hidden=false; banner.innerHTML=`<b>⚠️ 危险操作</b><br/>${esc(s.dangerousInfo)}<br/>确认无误后点击右下角按钮执行。`; }
+  else banner.hidden=true;
+</script>
+</body>
+</html>

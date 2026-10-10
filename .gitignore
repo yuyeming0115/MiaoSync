@@ -3,9 +3,13 @@
 *.exe
 /dist/
 
+# Runtime logs
+/miaosync.log
+
 # Build artifacts
 *.o
 *.a
+.cache/
 
 # Editor / IDE
 .idea/
@@ -13,6 +17,9 @@
 *.swp
 
 # Local config（含真实路径，切勿提交）
+miaosync.yaml
+config/miaosync.yaml
+# 旧拼写兜底，避免误提交
 maiosync.yaml
 config/maiosync.yaml
 
