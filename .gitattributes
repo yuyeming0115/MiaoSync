@@ -1,0 +1,10 @@
+# Go 源码与 Web 静态资源统一使用 LF 行尾，
+# 避免 Windows 开发机 autocrlf 转换导致 gofmt/CI 检查抖动。
+*.go    text eol=lf
+*.js    text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.sh    text eol=lf
