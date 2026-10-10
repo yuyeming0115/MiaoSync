@@ -32,15 +32,17 @@ type syncReq struct {
 }
 
 // loadOrCreateConfig 读取配置；不存在则写入默认配置。
-func loadOrCreateConfig(path string) (*config.Config, error) {
+// 配置有问题时不报错退出（降级）：尽力载入并返回问题描述，由界面提示用户修复。
+func loadOrCreateConfig(path string) (*config.Config, string) {
 	if _, err := os.Stat(path); err == nil {
-		return config.Load(path)
+		return config.LoadLenient(path)
 	}
 	cfg := defaultConfig()
 	if err := config.Save(path, cfg); err != nil {
-		return nil, err
+		// 默认配置都写不进去（目录不可写等）属于真致命错误
+		return nil, fmt.Sprintf("无法创建默认配置 %s: %v", path, err)
 	}
-	return cfg, nil
+	return cfg, ""
 }
 
 func defaultConfig() *config.Config {
@@ -90,6 +92,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		s.cfgMu.Lock()
 		s.config = &c
+		s.startupErr = "" // 保存成功即清除启动时的配置问题提示
 		s.cfgMu.Unlock()
 		writeJSON(w, map[string]bool{"ok": true})
 	default:
@@ -135,8 +138,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		list = append(list, ns)
 	}
 	writeJSON(w, map[string]interface{}{
-		"nodes":   list,
-		"running": running,
+		"nodes":       list,
+		"running":     running,
+		"configError": s.startupErr,
 	})
 }
 

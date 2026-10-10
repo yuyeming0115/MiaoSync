@@ -32,3 +32,6 @@ Thumbs.db
 
 # 构建临时文件
 *.exe~
+
+# 配置备份
+*.yaml.bak

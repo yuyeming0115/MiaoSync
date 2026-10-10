@@ -162,6 +162,16 @@
       .then((data) => {
         const btnSync = $("#btnSync");
         if (btnSync) btnSync.disabled = !!data.running;
+        // 启动时的配置问题（降级模式）：横幅提示，保存成功后消失
+        const cfgBanner = $("#cfgBanner");
+        if (data.configError) {
+          cfgBanner.innerHTML =
+            `<b>⚠️ 配置有问题</b><span class="cfg-sub">${esc(data.configError)}` +
+            ` —— 在左侧修正节点 / 规则后点「💾 保存配置」即可。</span>`;
+          cfgBanner.hidden = false;
+        } else {
+          cfgBanner.hidden = true;
+        }
         const wrap = $("#nodeBadges");
         wrap.innerHTML = "";
         if (data.running) {

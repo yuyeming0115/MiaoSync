@@ -4,6 +4,7 @@ package web
 import (
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -27,6 +28,10 @@ type Server struct {
 	cfgMu  sync.RWMutex // 保护 config 的读写
 	config *config.Config
 
+	// startupErr 启动时配置加载/校验发现的问题（降级模式）。
+	// 通过 /api/status 下发给前端展示，保存配置成功后清除。
+	startupErr string
+
 	// P0-4：运行状态与独占锁
 	stateMu sync.Mutex // 保护 running 与 currentRun
 	running bool
@@ -44,15 +49,17 @@ type runInfo struct {
 }
 
 // New 创建 Web 服务；若配置文件不存在则写入一份默认配置。
+// 配置存在但有问题时不失败（降级）：尽力载入，问题通过 /api/status 通知前端。
 func New(configPath string) (*Server, error) {
-	cfg, err := loadOrCreateConfig(configPath)
-	if err != nil {
-		return nil, err
+	cfg, warn := loadOrCreateConfig(configPath)
+	if cfg == nil {
+		return nil, fmt.Errorf("%s", warn)
 	}
 	return &Server{
 		engine:     msync.New(),
 		configPath: configPath,
 		config:     cfg,
+		startupErr: warn,
 		plans:      map[string]*msync.Plan{},
 	}, nil
 }

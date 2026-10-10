@@ -155,6 +155,34 @@ func Load(path string) (*Config, error) {
 	return &c, nil
 }
 
+// LoadLenient 尽力加载配置：yaml 可解析则用解析结果（跳过严格校验），并返回
+// 人类可读的问题描述；文件彻底无法解析时退回内置默认配置。
+// 用于启动降级——配置有问题也必须能打开界面让用户修复，而不是弹错退出。
+func LoadLenient(path string) (*Config, string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fallbackDefault(), ""
+	}
+	var c Config
+	if err := yaml.Unmarshal(data, &c); err != nil {
+		return fallbackDefault(), fmt.Sprintf("配置文件解析失败: %v（已载入内置默认配置）", err)
+	}
+	applyDefaults(&c)
+	if err := c.Validate(); err != nil {
+		return &c, err.Error()
+	}
+	return &c, ""
+}
+
+// fallbackDefault 启动降级用的最小默认配置（无节点，等用户在界面里补全）。
+func fallbackDefault() *Config {
+	return &Config{
+		Mode:     msync.ModeMirror,
+		Conflict: msync.ConflictRename,
+		Ignore:   DefaultIgnore(),
+	}
+}
+
 // Save 将配置写回文件（P3：原子写并保留 .bak）。
 func Save(path string, c *Config) error {
 	data, err := yaml.Marshal(c)
