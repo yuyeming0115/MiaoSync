@@ -1,36 +1,72 @@
-// MiaoSync — 你的 Win / Mac / 移动硬盘三端同步备份猫
+// MiaoSync — 你的 Win / Mac / 移动硬盘 三端同步备份猫
 //
-// 入口占位：当前仅打印 banner 与基础子命令路由骨架。
-// 真正的同步逻辑见 internal/sync（设计见 docs/design.md）。
+// 启动内置 Web GUI（单页应用），自动打开浏览器，无需任何外部依赖。
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+
+	"github.com/yuyeming0115/MiaoSync/internal/web"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		printBanner()
-		fmt.Println("用法: miaosync <command> [flags]")
-		fmt.Println("命令: init | sync | status | restore | version")
-		return
+	// 日志同时写入文件，便于无控制台（windowsgui 子系统）构建时排查问题。
+	if exe, err := os.Executable(); err == nil {
+		logPath := filepath.Join(filepath.Dir(exe), "miaosync.log")
+		if f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
+			log.SetOutput(io.MultiWriter(f, os.Stderr))
+		}
 	}
 
-	cmd := os.Args[1]
-	switch cmd {
-	case "version":
-		fmt.Println("MiaoSync v0.0.0 (skeleton)")
-	case "init", "sync", "status", "restore":
-		fmt.Printf("[skeleton] 子命令 '%s' 尚未实现，详见 docs/design.md\n", cmd)
-	default:
-		fmt.Printf("未知命令: %s\n", cmd)
+	configPath := flag.String("config", "miaosync.yaml", "配置文件路径（不存在则写入默认配置）")
+	port := flag.String("port", "7480", "Web 服务监听端口")
+	noOpen := flag.Bool("no-open", false, "不自动打开浏览器")
+	flag.Parse()
+
+	server, err := web.New(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	addr := "127.0.0.1:" + *port
+	url := "http://" + addr + "/"
+	fmt.Println("🐱 MiaoSync 已启动")
+	fmt.Printf("   浏览器打开：%s\n", url)
+	fmt.Printf("   配置文件：%s\n", *configPath)
+	fmt.Println("   按 Ctrl+C 退出。")
+
+	if !*noOpen {
+		go openBrowser(url)
+	}
+
+	if err := server.Start(addr); err != nil {
+		fmt.Fprintf(os.Stderr, "服务异常: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func printBanner() {
-	fmt.Println(`  /\_/\
- ( o.o )  MiaoSync 🐱
-  > ^ <   Win / Mac / 移动硬盘 三端同步备份`)
+// openBrowser 跨平台打开默认浏览器。
+func openBrowser(url string) {
+	var cmd string
+	var args []string
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start", "", url}
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	default:
+		cmd = "xdg-open"
+		args = []string{url}
+	}
+	_ = exec.Command(cmd, args...).Start()
 }
