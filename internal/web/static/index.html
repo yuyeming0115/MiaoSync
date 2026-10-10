@@ -24,6 +24,15 @@
         <button id="btnSync" class="btn btn-run btn-block">🚀 执行同步</button>
       </nav>
 
+      <div class="sidebar-tips">
+        <p class="tips-title">💡 三步上手</p>
+        <ol class="tips-list">
+          <li>插上硬盘，确认节点路径</li>
+          <li>点「预览同步」核对计划</li>
+          <li>无误后「执行同步」</li>
+        </ol>
+      </div>
+
       <div class="sidebar-footer">
         <div class="status-row">
           <span id="connStatus" class="badge badge-ok">已连接</span>
@@ -89,7 +98,7 @@
           <div class="progress-wrap">
             <div id="progressBar" class="progress-bar"></div>
           </div>
-          <div id="log" class="log"></div>
+          <div id="log" class="log"><span class="log-empty">暂无日志 —— 执行同步后此处显示进度</span></div>
         </section>
       </div>
 

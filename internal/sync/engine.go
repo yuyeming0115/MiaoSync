@@ -536,8 +536,10 @@ func handleConflict(a Action, strategy ConflictStrategy) error {
 		// 兜底：未携带根时退回 loser 同目录（兼容旧调用点）
 		loserRoot = filepath.Dir(loserPath)
 	}
-	relSub := filepath.Dir(strings.TrimPrefix(filepath.ToSlash(loserPath), filepath.ToSlash(loserRoot)))
-	relSub = filepath.FromSlash(relSub)
+	// 用 RelPath（相对路径）推导归档子目录，绝不对绝对路径做字符串裁剪：
+	// 配置写正斜杠（YAML 常见）而引擎内部用系统分隔符时 TrimPrefix 会失配，
+	// 把盘符拼进相对路径导致 mkdir 失败（Windows: "mkdir ...\conflicts\C:" 语法错误）。
+	relSub := filepath.Dir(filepath.FromSlash(a.RelPath))
 	conflictDir := filepath.Join(loserRoot, SnapshotDir, "conflicts", relSub)
 	if err := os.MkdirAll(conflictDir, 0o755); err != nil {
 		return err

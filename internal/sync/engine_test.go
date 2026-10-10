@@ -615,6 +615,46 @@ func TestSymlinkDoesNotEscapeRoot(t *testing.T) {
 	}
 }
 
+// TestConflictArchiveWithForwardSlashRoot 回归测试：
+// 节点路径在配置里写成正斜杠（YAML 常见写法）时，冲突归档不得因
+// 绝对路径字符串裁剪失配而把盘符拼进目录名（Windows 下 mkdir "...\conflicts\C:" 报错）。
+func TestConflictArchiveWithForwardSlashRoot(t *testing.T) {
+	base := t.TempDir()
+	a := filepath.Join(base, "nodeA")
+	b := filepath.Join(base, "nodeB")
+	os.MkdirAll(a, 0o755)
+	os.MkdirAll(b, 0o755)
+	writeFile(t, filepath.Join(a, "c.txt"), "versionA")
+	writeFile(t, filepath.Join(b, "c.txt"), "versionB")
+
+	now := time.Now()
+	_ = os.Chtimes(filepath.Join(b, "c.txt"), now.Add(-2*time.Second), now.Add(-2*time.Second))
+	_ = os.Chtimes(filepath.Join(a, "c.txt"), now, now)
+
+	eng := New()
+	// 模拟 YAML 配置里的正斜杠路径（filepath.ToSlash 在 Windows 上产生 C:/... 形态）
+	na := Node{Name: "A", Path: filepath.ToSlash(a)}
+	nb := Node{Name: "B", Path: filepath.ToSlash(b)}
+	sum, err := eng.Run([]Node{na, nb}, defaultIgnore(), SyncOptions{Mode: ModeMirror, Conflict: ConflictRename}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Errors != 0 {
+		t.Fatalf("正斜杠根路径下冲突处理应无错误，实际 errors=%d", sum.Errors)
+	}
+	// 败方（B 端）应有归档副本且位于 .miaosync/conflicts/ 下
+	found := false
+	_ = filepath.WalkDir(b, func(p string, d os.DirEntry, err error) error {
+		if err == nil && strings.Contains(d.Name(), ".conflict-") && strings.Contains(p, SnapshotDir) {
+			found = true
+		}
+		return nil
+	})
+	if !found {
+		t.Error("B 端 .miaosync/conflicts/ 下应有冲突归档副本")
+	}
+}
+
 // TestCorruptSnapshotEntersRecoveryMode 验证 P1-8：
 // 损坏的快照文件应返回错误，而非静默覆盖。
 func TestCorruptSnapshotEntersRecoveryMode(t *testing.T) {
