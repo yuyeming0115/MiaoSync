@@ -29,3 +29,6 @@ config/maiosync.yaml
 # OS
 .DS_Store
 Thumbs.db
+
+# 构建临时文件
+*.exe~
