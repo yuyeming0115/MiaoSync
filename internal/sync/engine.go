@@ -23,12 +23,24 @@ func (e *Engine) Scan(n Node, ignore []string) (map[string]*FileState, error) {
 	root := n.Path
 	info, err := os.Stat(root)
 	if err != nil {
-		return nil, fmt.Errorf("节点 %q 路径不可访问: %w", n.Name, err)
+		if os.IsNotExist(err) {
+			// 如果目录尚不存在，但其所在盘符/父级目录存在，自动创建此空目录（如首次同步到移动硬盘目标目录）
+			parent := filepath.Dir(root)
+			if pInfo, pErr := os.Stat(parent); pErr == nil && pInfo.IsDir() {
+				if mkErr := os.MkdirAll(root, 0o755); mkErr == nil {
+					info, err = os.Stat(root)
+				}
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("节点 %q 路径不可访问: %w", n.Name, err)
+		}
 	}
 	if !info.IsDir() {
 		return nil, fmt.Errorf("节点 %q 路径不是目录: %s", n.Name, root)
 	}
 
+	snap, _ := LoadSnapshot(root)
 	result := map[string]*FileState{}
 	// P1-5：检测大小写折叠冲突（区分大小写的 FS 上 A.txt 与 a.txt 落到同一比较键）
 	var collisions []string
@@ -70,15 +82,17 @@ func (e *Engine) Scan(n Node, ignore []string) (map[string]*FileState, error) {
 		if prev, ok := result[key]; ok && prev.Path != rel {
 			collisions = append(collisions, fmt.Sprintf("%q 与 %q 折叠为同一比较键", prev.Path, rel))
 		}
-		hash, err := HashFile(p)
-		if err != nil {
-			return fmt.Errorf("哈希失败 %s: %w", p, err)
+		var cachedHash string
+		if snap != nil && snap.Files != nil {
+			if old, ok := snap.Files[key]; ok && old.Size == fi.Size() && old.Mtime == fi.ModTime().UnixNano() {
+				cachedHash = old.Hash
+			}
 		}
 		result[key] = &FileState{
 			Path:  rel,
 			Size:  fi.Size(),
 			Mtime: fi.ModTime().UnixNano(),
-			Hash:  hash,
+			Hash:  cachedHash,
 		}
 		return nil
 	})
@@ -136,6 +150,47 @@ func decidePair(k string, sNow, dNow *FileState, sOld, dOld *FileState,
 	return decideMirror(k, sNow, dNow, sOld, dOld, src, dst, opt)
 }
 
+// sameContent 比对两个文件是否内容相同。
+// 第一性原理优化：
+// 1. 大小不同 -> 内容必然不同（无需任何读盘/哈希计算，0ms）
+// 2. 大小相同且修改时间相同 -> 视为同一文件（0ms）
+// 3. 大小相同但修改时间不同 -> 惰性比对 SHA-256 哈希
+func sameContent(srcRoot string, s *FileState, dstRoot string, d *FileState) bool {
+	if s == nil || d == nil {
+		return false
+	}
+	if s.Size != d.Size {
+		return false
+	}
+	if s.Mtime == d.Mtime {
+		return true
+	}
+	sHash := s.EnsureHash(filepath.Join(srcRoot, s.Path))
+	dHash := d.EnsureHash(filepath.Join(dstRoot, d.Path))
+	return sHash != "" && dHash != "" && sHash == dHash
+}
+
+// sameAsSnapshot 判断当前文件相比历史快照是否未被修改。
+// 1. 大小不同 -> 必然已修改（0ms）
+// 2. 大小相同且修改时间相同 -> 必然未修改（0ms）
+// 3. 大小相同但修改时间不同 -> 若快照有哈希，计算当前哈希比对
+func sameAsSnapshot(root string, cur *FileState, snap *FileState) bool {
+	if cur == nil || snap == nil {
+		return false
+	}
+	if cur.Size != snap.Size {
+		return false
+	}
+	if cur.Mtime == snap.Mtime {
+		return true
+	}
+	if snap.Hash != "" {
+		curHash := cur.EnsureHash(filepath.Join(root, cur.Path))
+		return curHash != "" && curHash == snap.Hash
+	}
+	return false
+}
+
 // decideBackup：source 权威，target 单向跟随。
 //   - source 有：target 缺失则复制；内容不同则按冲突策略处理；相同则无操作
 //   - source 无：source 曾有则传播删除到 target；source 从未有过则保留 target
@@ -144,7 +199,7 @@ func decideBackup(k string, sNow, dNow, sOld *FileState, src, dst Node, opt Plan
 	case sNow != nil && dNow == nil:
 		return makeCopy(src, dst, sNow, "源端存在，备份到目标端"), true
 	case sNow != nil && dNow != nil:
-		if sNow.Hash == dNow.Hash {
+		if sameContent(src.Path, sNow, dst.Path, dNow) {
 			return Action{}, false
 		}
 		return makeConflict(k, sNow, dNow, src, dst, opt.Conflict), true
@@ -178,7 +233,7 @@ func decideMirror(k string, sNow, dNow *FileState, sOld, dOld *FileState,
 
 	switch {
 	case sNow != nil && dNow != nil:
-		if sNow.Hash == dNow.Hash {
+		if sameContent(src.Path, sNow, dst.Path, dNow) {
 			return Action{}, false
 		}
 		return makeConflict(k, sNow, dNow, src, dst, opt.Conflict), true
@@ -190,7 +245,7 @@ func decideMirror(k string, sNow, dNow *FileState, sOld, dOld *FileState,
 			return makeCopy(src, dst, sNow, "源端独有，补齐到目标端"), true
 		}
 		// dst 曾有，现已删除
-		if sOld != nil && sNow.Hash == sOld.Hash {
+		if sOld != nil && sameAsSnapshot(src.Path, sNow, sOld) {
 			// src 未修改 → 传播删除到 src
 			return Action{
 				Kind:    ActionDelete,
@@ -208,7 +263,7 @@ func decideMirror(k string, sNow, dNow *FileState, sOld, dOld *FileState,
 		if sOld == nil {
 			return makeCopy(dst, src, dNow, "目标端独有，补齐到源端"), true
 		}
-		if dOld != nil && dNow.Hash == dOld.Hash {
+		if dOld != nil && sameAsSnapshot(dst.Path, dNow, dOld) {
 			return Action{
 				Kind:    ActionDelete,
 				RelPath: k,
@@ -763,17 +818,32 @@ func (e *Engine) RunWithPlan(plan *Plan, ignore []string, opt SyncOptions, progr
 		return nil, err
 	}
 
-	summary := &SyncSummary{TotalActions: len(plan.Actions)}
+	actions := plan.Actions
+	if len(opt.SelectedPaths) > 0 {
+		selectedSet := make(map[string]bool, len(opt.SelectedPaths))
+		for _, p := range opt.SelectedPaths {
+			selectedSet[p] = true
+		}
+		var filtered []Action
+		for _, a := range plan.Actions {
+			if selectedSet[a.RelPath] {
+				filtered = append(filtered, a)
+			}
+		}
+		actions = filtered
+	}
+
+	summary := &SyncSummary{TotalActions: len(actions)}
 
 	if opt.DryRun {
-		accumulate(summary, plan.Actions)
+		accumulate(summary, actions)
 		return summary, nil
 	}
 
 	// 危险操作保护（全局统计，P1-7：复用校验阶段的扫描结果）
 	deleteCount := 0
 	totalFiles := 0
-	for _, a := range plan.Actions {
+	for _, a := range actions {
 		if a.Kind == ActionDelete {
 			deleteCount++
 		}
@@ -801,7 +871,7 @@ func (e *Engine) RunWithPlan(plan *Plan, ignore []string, opt SyncOptions, progr
 	}
 
 	// 执行预计算的动作
-	pairSum, items, err := e.Apply(plan.Actions, opt.Conflict, true, progress)
+	pairSum, items, err := e.Apply(actions, opt.Conflict, true, progress)
 	if err != nil {
 		return nil, err
 	}

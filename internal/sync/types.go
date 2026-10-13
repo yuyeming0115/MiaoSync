@@ -54,6 +54,21 @@ type FileState struct {
 	Hash  string `json:"hash"`  // 内容哈希（SHA-256）
 }
 
+// EnsureHash 按需计算或返回文件的 SHA-256 哈希。若已有缓存则直接返回，否则流式读取计算并缓存。
+func (f *FileState) EnsureHash(fullPath string) string {
+	if f == nil {
+		return ""
+	}
+	if f.Hash != "" {
+		return f.Hash
+	}
+	h, err := HashFile(fullPath)
+	if err == nil {
+		f.Hash = h
+	}
+	return f.Hash
+}
+
 // Action 一个待执行的同步动作。
 type Action struct {
 	Kind    ActionKind `json:"kind"`
@@ -104,6 +119,7 @@ type SyncOptions struct {
 	Conflict         ConflictStrategy // 冲突策略
 	DryRun           bool             // 仅计划不执行
 	ConfirmDangerous bool             // 已确认危险操作（删除过多时）
+	SelectedPaths    []string         // 用户勾选的文件相对路径列表（为空表示全选）
 }
 
 // PlanOptions 计划生成选项。

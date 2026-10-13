@@ -3,6 +3,7 @@
 package main
 
 import (
+	"os/exec"
 	"syscall"
 	"unsafe"
 )
@@ -14,29 +15,11 @@ var (
 	procMessageBoxW   = user32DLL.NewProc("MessageBoxW")
 )
 
-// openURL 通过 ShellExecuteW 调用系统默认浏览器打开 URL。
-// 相比 cmd /c start：在 GUI 子系统（-H windowsgui）下无控制台依赖、行为确定。
+// openURL 调用系统默认浏览器打开 URL。
+// 使用 rundll32 url.dll,FileProtocolHandler 避免 Go 运行时非 STA 线程直接调用 ShellExecuteW 引发的异常崩溃。
 func openURL(url string) error {
-	u, err := syscall.UTF16PtrFromString(url)
-	if err != nil {
-		return err
-	}
-	// ShellExecuteW(hwnd, op, file, params, dir, show)：op=NULL → 默认动词 open
-	r, _, callErr := procShellExecuteW.Call(
-		0,
-		0,
-		uintptr(unsafe.Pointer(u)),
-		0,
-		0,
-		1, // SW_SHOWNORMAL
-	)
-	if r <= 32 { // ShellExecute 返回值 ≤32 均为失败
-		if callErr != syscall.Errno(0) {
-			return callErr
-		}
-		return syscall.EINVAL
-	}
-	return nil
+	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	return cmd.Start()
 }
 
 // fatalBox 弹出原生错误消息框。windowsgui 构建没有控制台，

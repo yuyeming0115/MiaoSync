@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -68,11 +69,18 @@ func New(configPath string) (*Server, error) {
 func (s *Server) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	sub, _ := fs.Sub(staticFS, "static")
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
+	staticServer := http.StripPrefix("/static/", http.FileServer(http.FS(sub)))
+	mux.Handle("/static/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		staticServer.ServeHTTP(w, r)
+	}))
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/plan", s.handlePlan)
 	mux.HandleFunc("/api/pick-folder", s.handlePickFolder)
+	mux.HandleFunc("/api/drives", s.handleDrives)
 	mux.HandleFunc("/api/sync", s.handleSync)
 	mux.HandleFunc("/api/meta", s.handleMeta)
 	mux.HandleFunc("/", s.handleIndex)
@@ -96,7 +104,8 @@ func (s *Server) Start(addr string) error {
 	signal.Notify(stop, os.Interrupt)
 
 	go func() {
-		<-stop
+		sig := <-stop
+		log.Printf("收到退出信号: %v，开始优雅关闭...", sig)
 		// 优雅关闭：等待同步完成
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -111,6 +120,7 @@ func (s *Server) Start(addr string) error {
 	}()
 
 	err := srv.ListenAndServe()
+	log.Printf("ListenAndServe 退出: %v", err)
 	if err == http.ErrServerClosed {
 		return nil
 	}
@@ -202,5 +212,8 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	w.Write(data)
 }

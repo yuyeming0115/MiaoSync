@@ -1,9 +1,16 @@
 package web
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/yuyeming0115/MiaoSync/internal/config"
 	msync "github.com/yuyeming0115/MiaoSync/internal/sync"
 )
 
@@ -52,5 +59,59 @@ func TestConcurrentSyncUnderRace(t *testing.T) {
 	wg.Wait()
 	if success != 1 {
 		t.Errorf("并发抢占应仅 1 次成功，实际 %d", success)
+	}
+}
+
+// TestPlanBackupAutoAdaptsPeerRoles 验证核心修复：
+// 当配置中所有节点角色为 peer 时，请求 backup 模式不再报错，
+// 而是自动推导第一个为 source，第二个为 target 并成功返回 plan。
+func TestPlanBackupAutoAdaptsPeerRoles(t *testing.T) {
+	base := t.TempDir()
+	srcDir := filepath.Join(base, "win-pc")
+	dstDir := filepath.Join(base, "hdd")
+	os.MkdirAll(srcDir, 0o755)
+	os.MkdirAll(dstDir, 0o755)
+
+	srv := &Server{
+		config: &config.Config{
+			Nodes: []config.NodeCfg{
+				{Name: "win-pc", WinPath: srcDir, Role: "peer"},
+				{Name: "hdd", WinPath: dstDir, Role: "peer"},
+			},
+			Mode:     msync.ModeMirror,
+			Conflict: msync.ConflictRename,
+		},
+		plans:  map[string]*msync.Plan{},
+		engine: msync.New(),
+	}
+
+	body := `{"nodes":["win-pc","hdd"],"mode":"backup","conflict":"rename"}`
+	req := httptest.NewRequest("POST", "/api/plan", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	srv.handlePlan(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("预期 200 OK，实际 %d, 响应: %s", rec.Code, rec.Body.String())
+	}
+	var res map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res["planId"] == "" {
+		t.Errorf("应成功返回 planId")
+	}
+}
+
+// TestHandleDrivesReturnsList 验证 drives 接口正常返回。
+func TestHandleDrivesReturnsList(t *testing.T) {
+	srv := &Server{}
+	req := httptest.NewRequest("GET", "/api/drives", nil)
+	rec := httptest.NewRecorder()
+
+	srv.handleDrives(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("预期 200 OK，实际 %d", rec.Code)
 	}
 }

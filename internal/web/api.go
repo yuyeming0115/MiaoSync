@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yuyeming0115/MiaoSync/internal/config"
@@ -29,6 +30,7 @@ type syncReq struct {
 	Conflict         string   `json:"conflict"`
 	ConfirmDangerous bool     `json:"confirmDangerous"`
 	PlanID           string   `json:"planId"` // P1-2：预览返回的计划 ID
+	SelectedPaths    []string `json:"selectedPaths"` // 用户勾选的文件相对路径
 }
 
 // loadOrCreateConfig 读取配置；不存在则写入默认配置。
@@ -144,7 +146,24 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+var (
+	countCacheMu sync.Mutex
+	countCache   = map[string]cachedCountItem{}
+)
+
+type cachedCountItem struct {
+	count     int
+	updatedAt time.Time
+}
+
 func countFiles(n msync.Node, ignore []string) int {
+	countCacheMu.Lock()
+	if c, ok := countCache[n.Path]; ok && time.Since(c.updatedAt) < 30*time.Second {
+		countCacheMu.Unlock()
+		return c.count
+	}
+	countCacheMu.Unlock()
+
 	count := 0
 	root := n.Path
 	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
@@ -171,6 +190,10 @@ func countFiles(n msync.Node, ignore []string) int {
 		count++
 		return nil
 	})
+
+	countCacheMu.Lock()
+	countCache[n.Path] = cachedCountItem{count: count, updatedAt: time.Now()}
+	countCacheMu.Unlock()
 	return count
 }
 
@@ -201,11 +224,41 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err.Error())
 		return
 	}
+	// 模式与角色自适应归一化：消除用户在前端因为 role/mode 组合产生的心智冲突
+	if mode == msync.ModeBackup {
+		hasSource := false
+		hasTarget := false
+		for _, n := range nodes {
+			if n.Role == string(msync.RoleSource) {
+				hasSource = true
+			}
+			if n.Role == string(msync.RoleTarget) {
+				hasTarget = true
+			}
+		}
+		// 若未显式设置 source/target（如全为 peer），按选择顺序自动赋权
+		if !hasSource || !hasTarget {
+			for i := range nodes {
+				if i == 0 {
+					nodes[i].Role = string(msync.RoleSource)
+				} else {
+					nodes[i].Role = string(msync.RoleTarget)
+				}
+			}
+		}
+	} else if mode == msync.ModeMirror {
+		// 双向镜像模式下，所有参与节点统一自适应归一化为 peer
+		for i := range nodes {
+			nodes[i].Role = string(msync.RolePeer)
+		}
+	}
+
 	conflict, err := msync.ParseConflict(req.Conflict)
 	if err != nil {
 		writeError(w, err.Error())
 		return
 	}
+
 	// P1-2：生成不可变计划并存储，返回计划 ID 供执行时校验
 	plan, err := s.engine.PlanWithID(nodes, ignore, mode, conflict)
 	if err != nil {
@@ -292,6 +345,7 @@ func (s *Server) handleSync(w http.ResponseWriter, r *http.Request) {
 		Conflict:         plan.Options.Conflict,
 		DryRun:           false,
 		ConfirmDangerous: req.ConfirmDangerous,
+		SelectedPaths:    req.SelectedPaths,
 	}, progress)
 	if summary != nil {
 		summary.DurationMs = time.Since(start).Milliseconds()
@@ -361,4 +415,13 @@ func sendEvent(w http.ResponseWriter, f http.Flusher, evt interface{}) {
 	data, _ := json.Marshal(evt)
 	fmt.Fprintf(w, "data: %s\n\n", data)
 	f.Flush()
+}
+
+// handleDrives 枚举当前操作系统可用的驱动器盘符/挂载卷。
+func (s *Server) handleDrives(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, getAvailableDrives())
 }

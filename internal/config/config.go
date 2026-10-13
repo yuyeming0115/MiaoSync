@@ -123,6 +123,33 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// 模式与角色自适应归一化：若为 backup 且未指定 source/target，自动将首节点设为 source，后续设为 target
+	if c.Mode == msync.ModeBackup {
+		hasSource := false
+		hasTarget := false
+		for _, n := range c.Nodes {
+			if n.Role == string(msync.RoleSource) {
+				hasSource = true
+			}
+			if n.Role == string(msync.RoleTarget) {
+				hasTarget = true
+			}
+		}
+		if !hasSource || !hasTarget {
+			for i := range c.Nodes {
+				if i == 0 {
+					c.Nodes[i].Role = string(msync.RoleSource)
+				} else {
+					c.Nodes[i].Role = string(msync.RoleTarget)
+				}
+			}
+		}
+	} else if c.Mode == msync.ModeMirror {
+		for i := range c.Nodes {
+			c.Nodes[i].Role = string(msync.RolePeer)
+		}
+	}
+
 	// P1-1：模式与角色一致性预检（拓扑合法性）
 	var nodes []msync.Node
 	for _, n := range c.Nodes {

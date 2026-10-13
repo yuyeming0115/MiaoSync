@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MiaoSync 🐱 三端同步备份猫</title>
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=1.1" />
 </head>
 <body>
   <div class="app">
-    <!-- 左列：配置（节点 / 规则 / 操作），尽量紧凑 -->
+    <!-- 左列：任务向导式配置（模式 / 节点路径 / 规则 / 操作） -->
     <aside class="sidebar">
       <div class="brand">
         <span class="logo">🐱</span>
@@ -18,8 +18,34 @@
         </div>
       </div>
 
+      <!-- 第 1 步：意图模式切换卡片 -->
+      <section class="side-sec mode-sec">
+        <div class="side-head">1. 同步模式</div>
+        <div class="mode-cards">
+          <button id="modeMirrorBtn" type="button" class="mode-card active" data-mode="mirror">
+            <span class="m-ico">🔁</span>
+            <div class="m-info">
+              <b>双向镜像</b>
+              <span class="m-desc">两端补齐一致</span>
+            </div>
+          </button>
+          <button id="modeBackupBtn" type="button" class="mode-card" data-mode="backup">
+            <span class="m-ico">📦</span>
+            <div class="m-info">
+              <b>单向备份</b>
+              <span class="m-desc">源 ➔ 目标单向</span>
+            </div>
+          </button>
+        </div>
+        <input type="hidden" id="mode" value="mirror" />
+      </section>
+
+      <!-- 第 2 步：节点列表（当前平台优先 + 盘符智能感知） -->
       <section class="side-sec">
-        <div class="side-head">节点 <button id="btnAddNode" class="mini" title="添加节点">＋ 添加</button></div>
+        <div class="side-head">
+          <span>2. 同步节点与路径</span>
+          <button id="btnAddNode" class="mini" title="添加节点">＋ 添加</button>
+        </div>
         <div id="nodeList"></div>
         <div class="part-row">
           <span class="part-label">参与</span>
@@ -27,18 +53,13 @@
         </div>
       </section>
 
+      <!-- 规则与高级选项 -->
       <section class="side-sec rules">
-        <div class="side-head">规则</div>
+        <div class="side-head">3. 冲突与安全保护</div>
         <div class="rule-grid">
-          <label>模式
-            <select id="mode">
-              <option value="mirror">mirror · 双向镜像</option>
-              <option value="backup">backup · 单向备份</option>
-            </select>
-          </label>
-          <label>冲突
+          <label>冲突处理
             <select id="conflict">
-              <option value="rename">rename · 旧版重命名备份</option>
+              <option value="rename">rename · 旧版安全归档到 .miaosync</option>
               <option value="keep">keep · 两端各自保留</option>
               <option value="newer">newer · 仅留较新</option>
             </select>
@@ -50,22 +71,23 @@
         </details>
       </section>
 
+      <!-- 操作主控按钮 -->
       <nav class="actions">
-        <button id="btnPreview" class="btn">👁 预览对比</button>
+        <button id="btnPreview" class="btn btn-primary">👁 预览对比</button>
         <button id="btnSync" class="btn btn-run">🚀 执行同步</button>
         <button id="btnSave" class="btn btn-ghost btn-sm">💾 保存配置</button>
       </nav>
 
       <div class="side-foot">
         <span id="connStatus" class="badge badge-ok">已连接</span>
-        <button id="btnRefresh" class="mini" title="刷新节点状态">⟳</button>
+        <button id="btnRefresh" class="mini" title="刷新节点与盘符">⟳ 刷新</button>
       </div>
     </aside>
 
-    <!-- 右列：文件对比（核心）+ 风险 + 迷你日志 -->
+    <!-- 右列：文件对比（核心）+ 风险 + 细粒度勾选 + 实时日志 -->
     <main class="main">
       <header class="main-head">
-        <h2>📂 文件对比</h2>
+        <h2>📂 文件对比视窗</h2>
         <div id="nodeBadges" class="node-badges"></div>
         <div id="cmpChips" class="chips"></div>
       </header>
@@ -74,14 +96,26 @@
       <div id="riskBanner" class="risk-banner" hidden></div>
 
       <section class="cmp-wrap">
-        <div id="cmpFilters" class="cmp-filters" hidden>
-          <button class="chip active" data-f="all">全部</button>
-          <button class="chip" data-f="rename-conflict">🔺 冲突</button>
-          <button class="chip" data-f="delete">🟠 删除</button>
-          <button class="chip" data-f="copy">复制</button>
+        <!-- 批量选择控制栏 -->
+        <div id="cmpBulkBar" class="cmp-bulk-bar" hidden>
+          <label class="bulk-label">
+            <input type="checkbox" id="chkSelectAll" checked />
+            <span>全选待同步项 (<b id="bulkSelCount">0</b> / <span id="bulkTotalCount">0</span>)</span>
+          </label>
+          <div class="bulk-actions">
+            <button id="btnSelectSafe" class="mini" type="button" title="仅勾选新增与复制，排除冲突与删除">仅勾选安全复制</button>
+            <button id="btnUncheckDeletions" class="mini" type="button" title="取消勾选所有删除操作">排除删除项</button>
+          </div>
+          <div id="cmpFilters" class="cmp-filters">
+            <button class="chip active" data-f="all">全部</button>
+            <button class="chip" data-f="rename-conflict">🔺 冲突</button>
+            <button class="chip" data-f="delete">🟠 删除</button>
+            <button class="chip" data-f="copy">复制</button>
+          </div>
         </div>
+
         <div id="cmpTable" class="cmp">
-          <p class="empty">① 插上硬盘 → ② 点「👁 预览对比」核对差异与风险 → ③ 无误后「🚀 执行同步」</p>
+          <p class="empty">① 核对左侧路径 → ② 点「👁 预览对比」生成差异 → ③ 自由勾选要传输的文件 → ④「🚀 执行同步」</p>
         </div>
       </section>
 
@@ -137,6 +171,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=1.1"></script>
 </body>
 </html>

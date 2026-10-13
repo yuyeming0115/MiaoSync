@@ -472,6 +472,61 @@ func TestPlanIDExecutesPreviewedActions(t *testing.T) {
 	}
 }
 
+// TestSelectiveSyncWithSelectedPaths 验证细粒度选择性同步：
+// 仅执行用户勾选的文件，未勾选的文件被跳过且下次依然待同步。
+func TestSelectiveSyncWithSelectedPaths(t *testing.T) {
+	base := t.TempDir()
+	a := filepath.Join(base, "nodeA")
+	b := filepath.Join(base, "nodeB")
+	os.MkdirAll(a, 0o755)
+	os.MkdirAll(b, 0o755)
+	writeFile(t, filepath.Join(a, "file1.txt"), "data1")
+	writeFile(t, filepath.Join(a, "file2.txt"), "data2")
+
+	eng := New()
+	na := Node{Name: "A", Path: a}
+	nb := Node{Name: "B", Path: b}
+
+	// 预览应产生 2 个 copy 动作
+	plan, err := eng.PlanWithID([]Node{na, nb}, defaultIgnore(), ModeMirror, ConflictRename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Actions) != 2 {
+		t.Fatalf("预期 2 个动作，实际 %d", len(plan.Actions))
+	}
+
+	// 用户仅勾选了 file1.txt
+	sum, err := eng.RunWithPlan(plan, defaultIgnore(), SyncOptions{
+		Mode:          ModeMirror,
+		Conflict:      ConflictRename,
+		SelectedPaths: []string{"file1.txt"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("执行失败: %v", err)
+	}
+	if sum.Copied != 1 {
+		t.Errorf("预期仅复制 1 个文件，实际 %d", sum.Copied)
+	}
+
+	// 验证磁盘：nodeB 上只有 file1.txt，没有 file2.txt
+	if _, err := os.Stat(filepath.Join(b, "file1.txt")); err != nil {
+		t.Errorf("file1.txt 应已被复制到 B 端: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(b, "file2.txt")); !os.IsNotExist(err) {
+		t.Errorf("file2.txt 未被勾选，不应存在于 B 端")
+	}
+
+	// 再次预览：file2.txt 依然在计划中，确保数据不遗漏
+	plan2, err := eng.PlanWithID([]Node{na, nb}, defaultIgnore(), ModeMirror, ConflictRename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan2.Actions) != 1 || plan2.Actions[0].RelPath != "file2.txt" {
+		t.Fatalf("第二次预览应保留未同步的 file2.txt，实际 %+v", plan2.Actions)
+	}
+}
+
 // TestBackupUsesRolesNotNodeOrder 验证 P1-1：
 // backup 模式下执行方向由角色决定，而非节点数组顺序。
 // 无论 source 在前还是 target 在前，结果应一致：只从 source 复制到 target。
